@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'webpack.config.js'
       - 'tsconfig.json'
+  workflow_dispatch:
 
 jobs:
   build:
