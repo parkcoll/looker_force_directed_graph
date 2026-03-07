@@ -4,10 +4,10 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'src/**'
-      - 'package.json'
-      - 'webpack.config.js'
-      - 'tsconfig.json'
+      - "src/**"
+      - "package.json"
+      - "webpack.config.js"
+      - "tsconfig.json"
   workflow_dispatch:
 
 jobs:
@@ -16,11 +16,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: "16"
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -32,6 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin master
           git add forcedirected.js
           git diff --staged --quiet || git commit -m "Build: update forcedirected.js [skip ci]"
           git push
