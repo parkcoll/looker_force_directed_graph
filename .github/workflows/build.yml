@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: master
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -34,7 +35,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin master
           git add forcedirected.js
-          git diff --staged --quiet || git commit -m "Build: update forcedirected.js [skip ci]"
-          git push
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "Build: update forcedirected.js [skip ci]"
+          git push origin HEAD:master
