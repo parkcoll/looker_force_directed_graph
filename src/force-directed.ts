@@ -15,7 +15,7 @@ interface ForceDirectedGraphVisualization extends VisualizationDefinition {
 }
 
 const vis: ForceDirectedGraphVisualization = {
-  id: 'force-directed', // id/label not required, but nice for testing and keeping manifests in sync
+  id: 'force-directed',
   label: 'Force Directed Graph',
   options: {
     color_range: {
@@ -65,28 +65,28 @@ const vis: ForceDirectedGraphVisualization = {
       default: []
     }
   },
-  // Set up the initial state of the visualization
   create(element, config) {
     element.style.fontFamily = `"Open Sans", "Helvetica", sans-serif`
     this.svg = d3.select(element).append('svg')
   },
-  // Render in response to the data or settings changing
   update(data, element, config, queryResponse, details) {
+    // Allow 1 OR MORE measures — use the first one for link weight
     if (!handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
       min_dimensions: 4, max_dimensions: 4,
-      min_measures: 1, max_measures: 1
+      min_measures: 1, max_measures: 99
     })) return
 
-    // Work around bug in Looker where sometimes it's called without config
+    // Apply defaults if config not yet populated
     if (!config.color_range) {
-       return;
+      config.color_range = this.options.color_range.default
     }
 
     this.svg.selectAll("*").remove();
 
-    const height = element.clientHeight + 20
-    const width = element.clientWidth
+    // Use parent element height if clientHeight is 0 (first render timing issue)
+    const height = (element.clientHeight || element.parentElement.clientHeight || 500) + 20
+    const width = element.clientWidth || element.parentElement.clientWidth || 800
 
     var radius = 5
     if (config.circle_radius) {
@@ -99,24 +99,20 @@ const vis: ForceDirectedGraphVisualization = {
     }
 
     const drag = simulation => {
-
        function dragstarted(d) {
           if (!d3.event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
           d.fy = d.y;
        }
-
        function dragged(d) {
           d.fx = d3.event.x;
           d.fy = d3.event.y;
        }
-
        function dragended(d) {
           if (!d3.event.active) simulation.alphaTarget(0);
           d.fx = null;
           d.fy = null;
        }
-
        return d3.drag()
          .on("start", dragstarted)
          .on("drag", dragged)
@@ -124,8 +120,8 @@ const vis: ForceDirectedGraphVisualization = {
     }
 
     const dimensions = queryResponse.fields.dimension_like
+    // Use the first measure for link weight
     const measure = queryResponse.fields.measure_like[0]
-    const format = d3.format(",d")
 
     const colorScale = d3.scaleOrdinal()
     var color = colorScale.range(d3.schemeCategory10)
@@ -137,42 +133,44 @@ const vis: ForceDirectedGraphVisualization = {
     var nodes = []
     var links = []
 
-    // Build nodes and links from data
     data.forEach((row: Row) => {
-       if (nodes_unique.indexOf(row[dimensions[0].name].value) == -1) {
-          nodes_unique.push(row[dimensions[0].name].value);
-          const newnode = { id: row[dimensions[0].name].value, group: row[dimensions[1].name].value};
-          nodes.push(newnode);
+       const srcVal = row[dimensions[0].name] && row[dimensions[0].name].value
+       const tgtVal = row[dimensions[2].name] && row[dimensions[2].name].value
+       if (srcVal == null || tgtVal == null) return
+
+       if (nodes_unique.indexOf(srcVal) == -1) {
+          nodes_unique.push(srcVal);
+          nodes.push({ id: srcVal, group: row[dimensions[1].name].value });
        }
-       if (nodes_unique.indexOf(row[dimensions[2].name].value) == -1) {
-          nodes_unique.push(row[dimensions[2].name].value);
-          const newnode = { id: row[dimensions[2].name].value, group: row[dimensions[3].name].value};
-          nodes.push(newnode);
+       if (nodes_unique.indexOf(tgtVal) == -1) {
+          nodes_unique.push(tgtVal);
+          nodes.push({ id: tgtVal, group: row[dimensions[3].name].value });
        }
-       const newlink = { source: row[dimensions[0].name].value, target: row[dimensions[2].name].value, value: row[measure.name].value};
-       links.push(newlink);
+       links.push({ source: srcVal, target: tgtVal, value: row[measure.name].value || 1 });
     })
 
-    // Remove isolated nodes (nodes with no connections)
-    const connectedIds = new Set<string>([
-      ...links.map(l => l.source as string),
-      ...links.map(l => l.target as string),
-    ])
+    // Remove isolated nodes
+    const connectedIds = new Set(
+      links.reduce((acc, l) => { acc.push(l.source, l.target); return acc; }, [])
+    )
     nodes = nodes.filter(n => connectedIds.has(n.id))
 
-    var manybody = d3.forceManyBody()
+    if (nodes.length === 0) {
+      this.addError({ title: 'No data', message: 'No connected nodes found. Check for null values in dimensions.' })
+      return
+    }
 
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.05)  // faster convergence for large graphs
+      .alphaDecay(0.05)
       .force("link", d3.forceLink(links).distance(linkDistance).id(d => (d as any).id))
-      .force("charge", manybody)
+      .force("charge", d3.forceManyBody())
       .force("center", d3.forceCenter(width / 2, height / 2));
 
     const svg = this.svg!
       .attr("width", '100%')
       .attr("height", height)
 
-    // Zoom + pan behaviour
+    // Zoom + pan
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.001, 8])
       .on("zoom", function() {
@@ -180,16 +178,15 @@ const vis: ForceDirectedGraphVisualization = {
       })
     svg.call(zoom as any)
 
-    // All graph elements live inside this container so zoom applies to them
     const container = svg.append("g")
 
     const link = container.append("g")
-      .attr("stroke", config.link_color)
+      .attr("stroke", config.link_color || '#999')
       .attr("stroke-opacity", 0.6)
       .selectAll("line")
       .data(links)
       .enter().append("line")
-      .attr("stroke-width", d => Math.sqrt(d.value));
+      .attr("stroke-width", d => Math.sqrt(Math.abs(d.value) || 1));
 
     var node = container.append("g")
       .attr("class", "nodes")
@@ -199,7 +196,7 @@ const vis: ForceDirectedGraphVisualization = {
       .attr("class", "node")
       .call(drag(simulation));
 
-    var circle = node.append("circle")
+    node.append("circle")
       .attr("stroke", "#fff")
       .attr("stroke-width", 1.5)
       .attr("r", radius)
@@ -214,51 +211,37 @@ const vis: ForceDirectedGraphVisualization = {
       node.append("text")
         .style("font-size", config.font_size)
         .style("fill", config.font_color)
-        .attr("y", (-1 * config.circle_radius -3) + "px")
+        .attr("y", (-1 * config.circle_radius - 3) + "px")
         .style("text-anchor", "middle")
         .style("font-weight", config.font_weight)
         .text(function(d) {
-          if (labelTypes.indexOf(d.group) > -1) {
-             return d.id;
-          } else {
-              return null;
-          }
-        });
-
-      node.append("title")
-        .text(function(d) {
-          if (labelTypes.indexOf(d.group) == -1) {
-             return d.id;
-          } else {
-             return null;
-          }
+          return labelTypes.indexOf(d.group) > -1 ? d.id : null
         });
     } else if (config.labels) {
       node.append("text")
         .style("font-size", config.font_size)
         .style("fill", config.font_color)
-        .attr("y", (-1 * config.circle_radius -3) + "px")
+        .attr("y", (-1 * config.circle_radius - 3) + "px")
         .style("text-anchor", "middle")
         .style("font-weight", config.font_weight)
-        .text(function(d) { return d.id; }
-        );
+        .text(function(d) { return d.id; });
     } else {
-      node.append("title")
-        .text(function(d) { return d.id }
-        );
+      node.append("title").text(function(d) { return d.id });
     }
 
     simulation.on("tick", () => {
       link
-        .attr("x1", d => { if (isNaN(d.source.x)) { return 0; } else { return d.source.x;}})
-        .attr("y1", d => { if (isNaN(d.source.y)) { return 0; } else { return d.source.y;}})
-        .attr("x2", d => { if (isNaN(d.target.x)) { return 0; } else { return d.target.x;}})
-        .attr("y2", d => { if (isNaN(d.target.y)) { return 0; } else { return d.target.y;}});
+        .attr("x1", d => isNaN(d.source.x) ? 0 : d.source.x)
+        .attr("y1", d => isNaN(d.source.y) ? 0 : d.source.y)
+        .attr("x2", d => isNaN(d.target.x) ? 0 : d.target.x)
+        .attr("y2", d => isNaN(d.target.y) ? 0 : d.target.y);
 
-      node
-        .attr("cx", d => d.x = Math.max(radius, Math.min(width - radius, d.x)))
-        .attr("cy", d => d.y = Math.max(radius, Math.min(height - radius, d.y)))
-        .attr("transform", function(d) { if (isNaN(d.x)) { return ""; } else { return "translate(" + d.x + "," + d.y + ")"; }});
+      node.attr("transform", function(d) {
+        if (isNaN(d.x)) return "";
+        d.x = Math.max(radius, Math.min(width - radius, d.x));
+        d.y = Math.max(radius, Math.min(height - radius, d.y));
+        return "translate(" + d.x + "," + d.y + ")";
+      });
     });
 
     // Auto-fit all nodes into view once the simulation settles
