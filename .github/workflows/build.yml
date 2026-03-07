@@ -35,7 +35,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Stash the built output, sync with remote, then restore
+          cp forcedirected.js /tmp/forcedirected_built.js
+          git fetch origin master
+          git reset --hard origin/master
+          cp /tmp/forcedirected_built.js forcedirected.js
           git add forcedirected.js
-          git diff --staged --quiet && echo "No changes" && exit 0
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
           git commit -m "Build: update forcedirected.js [skip ci]"
-          git push origin HEAD:master
+          git push origin master
