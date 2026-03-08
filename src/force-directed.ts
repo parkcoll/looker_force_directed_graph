@@ -177,6 +177,17 @@ const vis: ForceDirectedGraphVisualization = {
     const minLinkVal = Math.min(...linkValues) || 1
     console.log('[FDG] link value range:', minLinkVal, '–', maxLinkVal)
 
+    // Compute in-degree per node to scale node size (more incoming edges = larger circle)
+    const inDegree: {[key: string]: number} = {}
+    links.forEach((l: any) => {
+      const tgtId = l.target as string // still a string ID before simulation resolves it
+      inDegree[tgtId] = (inDegree[tgtId] || 0) + 1
+    })
+    const maxInDegree = Math.max(1, ...Object.values(inDegree))
+    // Scale node radius: min = base radius, max = 3× base radius (sqrt curve)
+    const nodeRadius = (d: any) => radius + Math.sqrt((inDegree[d.id] || 0) / maxInDegree) * radius * 2
+    console.log('[FDG] max in-degree:', maxInDegree)
+
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
       .force("link", d3.forceLink(links)
@@ -195,9 +206,10 @@ const vis: ForceDirectedGraphVisualization = {
       // Strong repulsion pushes all nodes apart, giving breathing room within clusters.
       .force("charge", d3.forceManyBody().strength(-80))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      // Enforce a hard minimum gap between node surfaces (2.5x radius per side).
+      // Enforce a hard minimum gap between node surfaces.
+      // Uses the per-node radius so large hub nodes get more personal space.
       // iterations(2) gives more accurate resolution for dense clusters.
-      .force("collision", (d3 as any).forceCollide().radius(radius * 2.5).iterations(2));
+      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 3).iterations(2));
 
     const svg = this.svg!
       .attr("width", '100%')
@@ -213,18 +225,19 @@ const vis: ForceDirectedGraphVisualization = {
     const container = svg.append("g")
 
     const link = container.append("g")
-      .attr("stroke", config.link_color || '#999')
-      .attr("stroke-opacity", 0.6)
-      .selectAll("line")
+      .attr("fill", "none")
+      .attr("stroke", config.link_color || '#bbb')  // light gray by default
+      .attr("stroke-opacity", 0.4)
+      .selectAll("path")
       .data(links)
-      .enter().append("line")
+      .enter().append("path")
       .attr("stroke-width", d => {
         // Scale edge thickness by measure value (e.g. collaboration hours).
         // If all values are the same (or no measure), every edge gets width 1.5.
-        // Otherwise scale from 0.5px (min) to 8px (max) using a sqrt curve.
+        // Otherwise scale from 0.5px (min) to 6px (max) using a sqrt curve.
         if (maxLinkVal === minLinkVal) return 1.5;
         const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0–1
-        return 0.5 + Math.sqrt(t) * 7.5; // 0.5–8 px
+        return 0.5 + Math.sqrt(t) * 5.5; // 0.5–6 px
       });
 
     var node = container.append("g")
@@ -238,7 +251,7 @@ const vis: ForceDirectedGraphVisualization = {
     node.append("circle")
       .attr("stroke", "#fff")
       .attr("stroke-width", 1.5)
-      .attr("r", radius)
+      .attr("r", (d: any) => nodeRadius(d))  // size by in-degree
       .attr("fill", d => color(d.group))
 
     var labelTypes = [];
@@ -272,11 +285,22 @@ const vis: ForceDirectedGraphVisualization = {
       if (tickCount === 1) console.log('[FDG] first tick fired')
       if (tickCount === 10) console.log('[FDG] 10 ticks in, simulation running')
 
-      link
-        .attr("x1", d => isNaN(d.source.x) ? 0 : d.source.x)
-        .attr("y1", d => isNaN(d.source.y) ? 0 : d.source.y)
-        .attr("x2", d => isNaN(d.target.x) ? 0 : d.target.x)
-        .attr("y2", d => isNaN(d.target.y) ? 0 : d.target.y);
+      // Draw edges as quadratic bezier arcs so they curve around nodes rather
+      // than passing straight through them. Control point is offset perpendicular
+      // to the midpoint by 25% of the edge length (capped at 40px).
+      link.attr("d", (d: any) => {
+        const sx = isNaN(d.source.x) ? 0 : d.source.x
+        const sy = isNaN(d.source.y) ? 0 : d.source.y
+        const tx = isNaN(d.target.x) ? 0 : d.target.x
+        const ty = isNaN(d.target.y) ? 0 : d.target.y
+        const dx = tx - sx, dy = ty - sy
+        const len = Math.sqrt(dx * dx + dy * dy) || 1
+        const arc = Math.min(len * 0.25, 40)
+        // Perpendicular offset from midpoint
+        const cx = (sx + tx) / 2 - (dy / len) * arc
+        const cy = (sy + ty) / 2 + (dx / len) * arc
+        return `M${sx},${sy}Q${cx},${cy} ${tx},${ty}`
+      });
 
       // No clamping — let nodes go wherever the physics puts them.
       // The auto-fit on simulation end zooms to show everything.
@@ -308,6 +332,56 @@ const vis: ForceDirectedGraphVisualization = {
         d3.zoomIdentity.translate(tx, ty).scale(scale)
       )
     })
+
+    // Fixed legend — appended to svg directly so it stays put during zoom/pan
+    const groups = Array.from(new Set(nodes.map((n: any) => n.group)))
+      .filter((g: any) => g != null && g !== '' && g !== 'null' && g !== 'undefined')
+      .sort() as string[]
+
+    if (groups.length > 0) {
+      const legendGroups = groups.slice(0, 30) // cap at 30 entries
+      const lPad = 8, lItemH = 18
+      const lWidth = 170
+      const lHeight = legendGroups.length * lItemH + lPad * 2
+
+      const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(10, 10)`)
+        .style("pointer-events", "none") // don't interfere with zoom/drag
+
+      // Background box
+      legend.append("rect")
+        .attr("width", lWidth).attr("height", lHeight)
+        .attr("rx", 5)
+        .attr("fill", "white").attr("fill-opacity", 0.88)
+        .attr("stroke", "#ccc").attr("stroke-width", 1)
+
+      legendGroups.forEach((group, i) => {
+        const row = legend.append("g")
+          .attr("transform", `translate(${lPad}, ${lPad + i * lItemH})`)
+
+        row.append("rect")
+          .attr("width", 10).attr("height", 10).attr("y", 2)
+          .attr("fill", color(group) as string)
+          .attr("rx", 2)
+
+        row.append("text")
+          .attr("x", 16).attr("y", 11)
+          .style("font-size", "11px")
+          .style("fill", "#333")
+          .style("font-family", '"Open Sans", "Helvetica", sans-serif')
+          .text(group.length > 20 ? group.slice(0, 19) + '…' : group)
+      })
+
+      if (groups.length > 30) {
+        const row = legend.append("g")
+          .attr("transform", `translate(${lPad}, ${lPad + 30 * lItemH})`)
+        row.append("text")
+          .attr("x", 0).attr("y", 11)
+          .style("font-size", "10px").style("fill", "#999")
+          .text(`+ ${groups.length - 30} more`)
+      }
+    }
 
     console.log('[FDG] update() setup complete, simulation running in background')
   }
