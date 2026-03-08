@@ -180,21 +180,24 @@ const vis: ForceDirectedGraphVisualization = {
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
       .force("link", d3.forceLink(links)
-        // Key insight: high-collaboration pairs get SHORT desired distance (pulled tight),
-        // low-collaboration pairs get LONG desired distance (allowed to stay apart).
-        // This clusters strongly-connected groups and reduces cross-graph spanning lines.
+        // High-collaboration pairs: shorter desired distance (pulled close).
+        // Low-collaboration pairs: longer desired distance (stay further apart).
+        // Minimum is 3x node radius so overlapping edges are never too cramped.
         .distance((d: any) => {
           if (maxLinkVal === minLinkVal) return linkDistance;
           const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0=weak, 1=strong
-          return linkDistance * (2 - 1.5 * t); // strong→0.5x distance, weak→2x distance
+          return Math.max(linkDistance * (1 + 2 * (1 - t)), radius * 3); // strong→1x, weak→3x
         })
-        .strength(0.7)
+        // No explicit strength — use d3's default: 1/min(sourceDegree, targetDegree).
+        // This prevents hub nodes from collapsing into a "black hole":
+        // a node with 50 connections gets strength 0.02/link instead of a fixed 0.7.
         .id(d => (d as any).id))
-      // -20 is less repulsive than the d3 default (-30), allowing clusters to form tighter groups
-      .force("charge", d3.forceManyBody().strength(-20))
+      // Strong repulsion pushes all nodes apart, giving breathing room within clusters.
+      .force("charge", d3.forceManyBody().strength(-80))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      // collision detection keeps nodes from sitting on top of each other
-      .force("collision", (d3 as any).forceCollide().radius(radius + 2));
+      // Enforce a hard minimum gap between node surfaces (2.5x radius per side).
+      // iterations(2) gives more accurate resolution for dense clusters.
+      .force("collision", (d3 as any).forceCollide().radius(radius * 2.5).iterations(2));
 
     const svg = this.svg!
       .attr("width", '100%')
