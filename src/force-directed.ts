@@ -79,7 +79,7 @@ const vis: ForceDirectedGraphVisualization = {
 
     const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
-      min_dimensions: 4, max_dimensions: 5,
+      min_dimensions: 3, max_dimensions: 4,
       min_measures: 0, max_measures: 99
     })
     console.log('[FDG] handleErrors result:', errResult)
@@ -119,13 +119,29 @@ const vis: ForceDirectedGraphVisualization = {
 
     const dimensions = queryResponse.fields.dimension_like
     const measure = queryResponse.fields.measure_like[0]
-    // 5th dimension (index 4) is treated as the edge weight (e.g. collaboration hours).
+    // Dimension layout (target group removed — now optional 4th dim is edge weight):
+    //   dim 0: source node ID
+    //   dim 1: source group  (colors ALL nodes that appear as a source)
+    //   dim 2: target node ID
+    //   dim 3: edge weight dimension (optional — e.g. collaboration hours)
     // Falls back to first measure, then to 1 if neither is present.
-    const edgeWeightDim = dimensions.length >= 5 ? dimensions[4] : null
+    const edgeWeightDim = dimensions.length >= 4 ? dimensions[3] : null
     console.log('[FDG] edge weight source:', edgeWeightDim ? ('dim:' + edgeWeightDim.name) : measure ? ('measure:' + measure.name) : 'none (default 1)')
 
     const colorScale = d3.scaleOrdinal()
     var color = colorScale.range(config.color_range || d3.schemeCategory10)
+
+    // First pass: build a group lookup from source ID → source group.
+    // Only nodes that appear as a SOURCE get a real group/color.
+    // Target-only nodes (never a source) stay as '__unknown__' (rendered gray).
+    const groupMap: {[key: string]: string} = {}
+    data.forEach((row: Row) => {
+      const srcVal = row[dimensions[0].name] && row[dimensions[0].name].value
+      const srcGroup = row[dimensions[1].name] && row[dimensions[1].name].value
+      if (srcVal != null && srcGroup != null) {
+        groupMap[String(srcVal)] = String(srcGroup)
+      }
+    })
 
     var nodes_unique = []
     var nodes = []
@@ -138,11 +154,12 @@ const vis: ForceDirectedGraphVisualization = {
 
        if (nodes_unique.indexOf(srcVal) == -1) {
           nodes_unique.push(srcVal);
-          nodes.push({ id: srcVal, group: row[dimensions[1].name].value });
+          nodes.push({ id: srcVal, group: groupMap[String(srcVal)] || '__unknown__' });
        }
        if (nodes_unique.indexOf(tgtVal) == -1) {
           nodes_unique.push(tgtVal);
-          nodes.push({ id: tgtVal, group: row[dimensions[3].name].value });
+          // Target nodes only get a color if they also appear as a source in this dataset
+          nodes.push({ id: tgtVal, group: groupMap[String(tgtVal)] || '__unknown__' });
        }
        const edgeWeight = edgeWeightDim
          ? (Number(row[edgeWeightDim.name].value) || 1)
@@ -261,8 +278,10 @@ const vis: ForceDirectedGraphVisualization = {
     node.append("circle")
       .attr("stroke", "#fff")
       .attr("stroke-width", 1.5)
-      .attr("r", (d: any) => nodeRadius(d))  // size by in-degree
-      .attr("fill", d => color(d.group))
+      .attr("r", (d: any) => nodeRadius(d))  // size by total degree
+      // Target-only nodes (never a source in this dataset) rendered as light gray.
+      // All other nodes get their source group color.
+      .attr("fill", (d: any) => d.group === '__unknown__' ? '#d0d0d0' : color(d.group))
 
     var labelTypes = [];
     if (config.labelTypes && config.labelTypes.length) {
@@ -345,7 +364,7 @@ const vis: ForceDirectedGraphVisualization = {
 
     // Fixed legend — appended to svg directly so it stays put during zoom/pan
     const groups = Array.from(new Set(nodes.map((n: any) => n.group)))
-      .filter((g: any) => g != null && g !== '' && g !== 'null' && g !== 'undefined')
+      .filter((g: any) => g != null && g !== '' && g !== 'null' && g !== 'undefined' && g !== '__unknown__')
       .sort() as string[]
 
     if (groups.length > 0) {
