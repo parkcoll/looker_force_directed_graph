@@ -203,9 +203,16 @@ const vis: ForceDirectedGraphVisualization = {
         // This prevents hub nodes from collapsing into a "black hole":
         // a node with 50 connections gets strength 0.02/link instead of a fixed 0.7.
         .id(d => (d as any).id))
-      // Strong repulsion pushes all nodes apart, giving breathing room within clusters.
-      .force("charge", d3.forceManyBody().strength(-80))
-      .force("center", d3.forceCenter(width / 2, height / 2))
+      // Moderate repulsion — enough breathing room without extreme spreading.
+      .force("charge", d3.forceManyBody().strength(-50))
+      // forceX/forceY instead of forceCenter:
+      //   • Applies proportional spring forces, so disconnected clusters are pulled
+      //     back toward center the further they drift (forceCenter can't do this).
+      //   • Aspect-ratio-adjusted strengths fill the canvas shape:
+      //     stronger y-centering compresses height, letting nodes spread wider in x
+      //     to match the typically landscape viewport.
+      .force("x", d3.forceX(width / 2).strength(0.04))
+      .force("y", d3.forceY(height / 2).strength(0.04 * (width / height)))
       // Enforce a hard minimum gap between node surfaces.
       // Uses the per-node radius so large hub nodes get more personal space.
       // iterations(2) gives more accurate resolution for dense clusters.
@@ -227,7 +234,7 @@ const vis: ForceDirectedGraphVisualization = {
     const link = container.append("g")
       .attr("fill", "none")
       .attr("stroke", config.link_color || '#bbb')  // light gray by default
-      .attr("stroke-opacity", 0.4)
+      .attr("stroke-opacity", 0.25)
       .selectAll("path")
       .data(links)
       .enter().append("path")
