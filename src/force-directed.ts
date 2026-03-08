@@ -177,16 +177,19 @@ const vis: ForceDirectedGraphVisualization = {
     const minLinkVal = Math.min(...linkValues) || 1
     console.log('[FDG] link value range:', minLinkVal, '–', maxLinkVal)
 
-    // Compute in-degree per node to scale node size (more incoming edges = larger circle)
-    const inDegree: {[key: string]: number} = {}
+    // Compute total degree (in + out) per node so hub nodes that originate
+    // many edges are sized correctly, not just nodes that receive many edges.
+    const degree: {[key: string]: number} = {}
     links.forEach((l: any) => {
-      const tgtId = l.target as string // still a string ID before simulation resolves it
-      inDegree[tgtId] = (inDegree[tgtId] || 0) + 1
+      const srcId = l.source as string
+      const tgtId = l.target as string
+      degree[srcId] = (degree[srcId] || 0) + 1
+      degree[tgtId] = (degree[tgtId] || 0) + 1
     })
-    const maxInDegree = Math.max(1, ...Object.keys(inDegree).map(k => inDegree[k]))
+    const maxDegree = Math.max(1, ...Object.keys(degree).map(k => degree[k]))
     // Scale node radius: min = base radius, max = 3× base radius (sqrt curve)
-    const nodeRadius = (d: any) => radius + Math.sqrt((inDegree[d.id] || 0) / maxInDegree) * radius * 2
-    console.log('[FDG] max in-degree:', maxInDegree)
+    const nodeRadius = (d: any) => radius + Math.sqrt((degree[d.id] || 0) / maxDegree) * radius * 2
+    console.log('[FDG] max degree:', maxDegree)
 
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
