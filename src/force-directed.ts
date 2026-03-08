@@ -80,7 +80,7 @@ const vis: ForceDirectedGraphVisualization = {
     const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
       min_dimensions: 4, max_dimensions: 4,
-      min_measures: 1, max_measures: 99
+      min_measures: 0, max_measures: 99
     })
     console.log('[FDG] handleErrors result:', errResult)
     if (!errResult) return
@@ -140,7 +140,7 @@ const vis: ForceDirectedGraphVisualization = {
           nodes_unique.push(tgtVal);
           nodes.push({ id: tgtVal, group: row[dimensions[3].name].value });
        }
-       links.push({ source: srcVal, target: tgtVal, value: row[measure.name].value || 1 });
+       links.push({ source: srcVal, target: tgtVal, value: measure ? (row[measure.name].value || 1) : 1 });
     })
 
     console.log('[FDG] nodes before filter:', nodes.length)
