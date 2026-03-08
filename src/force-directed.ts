@@ -79,7 +79,7 @@ const vis: ForceDirectedGraphVisualization = {
 
     const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
-      min_dimensions: 4, max_dimensions: 4,
+      min_dimensions: 4, max_dimensions: 5,
       min_measures: 0, max_measures: 99
     })
     console.log('[FDG] handleErrors result:', errResult)
@@ -119,6 +119,10 @@ const vis: ForceDirectedGraphVisualization = {
 
     const dimensions = queryResponse.fields.dimension_like
     const measure = queryResponse.fields.measure_like[0]
+    // 5th dimension (index 4) is treated as the edge weight (e.g. collaboration hours).
+    // Falls back to first measure, then to 1 if neither is present.
+    const edgeWeightDim = dimensions.length >= 5 ? dimensions[4] : null
+    console.log('[FDG] edge weight source:', edgeWeightDim ? ('dim:' + edgeWeightDim.name) : measure ? ('measure:' + measure.name) : 'none (default 1)')
 
     const colorScale = d3.scaleOrdinal()
     var color = colorScale.range(config.color_range || d3.schemeCategory10)
@@ -140,7 +144,11 @@ const vis: ForceDirectedGraphVisualization = {
           nodes_unique.push(tgtVal);
           nodes.push({ id: tgtVal, group: row[dimensions[3].name].value });
        }
-       links.push({ source: srcVal, target: tgtVal, value: measure ? (row[measure.name].value || 1) : 1 });
+       const edgeWeight = edgeWeightDim
+         ? (Number(row[edgeWeightDim.name].value) || 1)
+         : measure ? (Number(row[measure.name].value) || 1)
+         : 1
+       links.push({ source: srcVal, target: tgtVal, value: edgeWeight });
     })
 
     console.log('[FDG] nodes before filter:', nodes.length)
