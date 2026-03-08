@@ -7,7 +7,6 @@ import {
   VisualizationDefinition
 } from './types'
 
-// Global values provided via the API
 declare var looker: Looker
 
 interface ForceDirectedGraphVisualization extends VisualizationDefinition {
@@ -68,50 +67,49 @@ const vis: ForceDirectedGraphVisualization = {
   create(element, config) {
     element.style.fontFamily = `"Open Sans", "Helvetica", sans-serif`
     this.svg = d3.select(element).append('svg')
+    console.log('[FDG] create() called')
   },
   update(data, element, config, queryResponse, details) {
-    // Allow 1 OR MORE measures — use the first one for link weight
-    if (!handleErrors(this, queryResponse, {
+    console.log('[FDG] update() called')
+    console.log('[FDG] data rows:', data.length)
+    console.log('[FDG] element size:', element.clientWidth, 'x', element.clientHeight)
+    console.log('[FDG] dimensions:', queryResponse.fields.dimension_like.map(d => d.name))
+    console.log('[FDG] measures:', queryResponse.fields.measure_like.map(m => m.name))
+    console.log('[FDG] config.color_range:', config.color_range)
+
+    const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
       min_dimensions: 4, max_dimensions: 4,
       min_measures: 1, max_measures: 99
-    })) return
+    })
+    console.log('[FDG] handleErrors result:', errResult)
+    if (!errResult) return
 
-    // Apply defaults if config not yet populated
     if (!config.color_range) {
+      console.log('[FDG] no color_range in config, applying defaults')
       config.color_range = this.options.color_range.default
     }
 
     this.svg.selectAll("*").remove();
 
-    // Use parent element height if clientHeight is 0 (first render timing issue)
     const height = (element.clientHeight || element.parentElement.clientHeight || 500) + 20
     const width = element.clientWidth || element.parentElement.clientWidth || 800
+    console.log('[FDG] computed size:', width, 'x', height)
 
-    var radius = 5
-    if (config.circle_radius) {
-        radius = config.circle_radius;
-    }
-
-    var linkDistance = 30
-    if (config.linkDistance) {
-        linkDistance = config.linkDistance;
-    }
+    var radius = Number(config.circle_radius) || 5
+    var linkDistance = Number(config.linkDistance) || 30
 
     const drag = simulation => {
        function dragstarted(d) {
           if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
+          d.fx = d.x; d.fy = d.y;
        }
        function dragged(d) {
-          d.fx = d3.event.x;
-          d.fy = d3.event.y;
+          d.fx = d3.event.x; d.fy = d3.event.y;
        }
        function dragended(d) {
           if (!d3.event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
+          d.fx = null; d.fy = null;
        }
        return d3.drag()
          .on("start", dragstarted)
@@ -120,14 +118,10 @@ const vis: ForceDirectedGraphVisualization = {
     }
 
     const dimensions = queryResponse.fields.dimension_like
-    // Use the first measure for link weight
     const measure = queryResponse.fields.measure_like[0]
 
     const colorScale = d3.scaleOrdinal()
-    var color = colorScale.range(d3.schemeCategory10)
-    if (config.color_range != null) {
-        color = colorScale.range(config.color_range)
-    }
+    var color = colorScale.range(config.color_range || d3.schemeCategory10)
 
     var nodes_unique = []
     var nodes = []
@@ -149,16 +143,25 @@ const vis: ForceDirectedGraphVisualization = {
        links.push({ source: srcVal, target: tgtVal, value: row[measure.name].value || 1 });
     })
 
+    console.log('[FDG] nodes before filter:', nodes.length)
+    console.log('[FDG] links:', links.length)
+    if (nodes.length > 0) console.log('[FDG] sample node:', JSON.stringify(nodes[0]))
+    if (links.length > 0) console.log('[FDG] sample link:', JSON.stringify(links[0]))
+
     // Remove isolated nodes
     const connectedIds = new Set(
       links.reduce((acc, l) => { acc.push(l.source, l.target); return acc; }, [])
     )
     nodes = nodes.filter(n => connectedIds.has(n.id))
+    console.log('[FDG] nodes after filter:', nodes.length)
 
     if (nodes.length === 0) {
+      console.log('[FDG] ERROR: no connected nodes — check dimension field mapping')
       this.addError({ title: 'No data', message: 'No connected nodes found. Check for null values in dimensions.' })
       return
     }
+
+    console.log('[FDG] starting simulation...')
 
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
@@ -170,7 +173,6 @@ const vis: ForceDirectedGraphVisualization = {
       .attr("width", '100%')
       .attr("height", height)
 
-    // Zoom + pan
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.001, 8])
       .on("zoom", function() {
@@ -214,9 +216,7 @@ const vis: ForceDirectedGraphVisualization = {
         .attr("y", (-1 * config.circle_radius - 3) + "px")
         .style("text-anchor", "middle")
         .style("font-weight", config.font_weight)
-        .text(function(d) {
-          return labelTypes.indexOf(d.group) > -1 ? d.id : null
-        });
+        .text(function(d) { return labelTypes.indexOf(d.group) > -1 ? d.id : null });
     } else if (config.labels) {
       node.append("text")
         .style("font-size", config.font_size)
@@ -229,7 +229,12 @@ const vis: ForceDirectedGraphVisualization = {
       node.append("title").text(function(d) { return d.id });
     }
 
+    var tickCount = 0
     simulation.on("tick", () => {
+      tickCount++
+      if (tickCount === 1) console.log('[FDG] first tick fired')
+      if (tickCount === 10) console.log('[FDG] 10 ticks in, simulation running')
+
       link
         .attr("x1", d => isNaN(d.source.x) ? 0 : d.source.x)
         .attr("y1", d => isNaN(d.source.y) ? 0 : d.source.y)
@@ -244,12 +249,12 @@ const vis: ForceDirectedGraphVisualization = {
       });
     });
 
-    // Auto-fit all nodes into view once the simulation settles
     simulation.on("end", () => {
+      console.log('[FDG] simulation ended after', tickCount, 'ticks')
       const pad = 40
       const xs = nodes.map((d: any) => d.x).filter((v: number) => !isNaN(v))
       const ys = nodes.map((d: any) => d.y).filter((v: number) => !isNaN(v))
-      if (!xs.length) return
+      if (!xs.length) { console.log('[FDG] no valid node positions at end'); return }
 
       const x0 = Math.min(...xs) - pad
       const x1 = Math.max(...xs) + pad
@@ -259,12 +264,15 @@ const vis: ForceDirectedGraphVisualization = {
       const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.9
       const tx = width / 2 - scale * ((x0 + x1) / 2)
       const ty = height / 2 - scale * ((y0 + y1) / 2)
+      console.log('[FDG] auto-fit: scale=', scale, 'tx=', tx, 'ty=', ty)
 
       svg.transition().duration(750).call(
         (zoom as any).transform,
         d3.zoomIdentity.translate(tx, ty).scale(scale)
       )
     })
+
+    console.log('[FDG] update() setup complete, simulation running in background')
   }
 }
 
