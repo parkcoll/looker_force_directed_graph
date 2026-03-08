@@ -183,7 +183,7 @@ const vis: ForceDirectedGraphVisualization = {
       const tgtId = l.target as string // still a string ID before simulation resolves it
       inDegree[tgtId] = (inDegree[tgtId] || 0) + 1
     })
-    const maxInDegree = Math.max(1, ...Object.values(inDegree))
+    const maxInDegree = Math.max(1, ...Object.keys(inDegree).map(k => inDegree[k]))
     // Scale node radius: min = base radius, max = 3× base radius (sqrt curve)
     const nodeRadius = (d: any) => radius + Math.sqrt((inDegree[d.id] || 0) / maxInDegree) * radius * 2
     console.log('[FDG] max in-degree:', maxInDegree)
