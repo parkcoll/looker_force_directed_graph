@@ -241,10 +241,10 @@ const vis: ForceDirectedGraphVisualization = {
         .attr("x2", d => isNaN(d.target.x) ? 0 : d.target.x)
         .attr("y2", d => isNaN(d.target.y) ? 0 : d.target.y);
 
+      // No clamping — let nodes go wherever the physics puts them.
+      // The auto-fit on simulation end zooms to show everything.
       node.attr("transform", function(d) {
         if (isNaN(d.x)) return "";
-        d.x = Math.max(radius, Math.min(width - radius, d.x));
-        d.y = Math.max(radius, Math.min(height - radius, d.y));
         return "translate(" + d.x + "," + d.y + ")";
       });
     });
