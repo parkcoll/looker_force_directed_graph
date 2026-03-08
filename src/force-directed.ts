@@ -171,8 +171,17 @@ const vis: ForceDirectedGraphVisualization = {
 
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
-      // strength(0.7) pulls connected nodes together more firmly than the auto default
-      .force("link", d3.forceLink(links).distance(linkDistance).strength(0.7).id(d => (d as any).id))
+      .force("link", d3.forceLink(links)
+        // Key insight: high-collaboration pairs get SHORT desired distance (pulled tight),
+        // low-collaboration pairs get LONG desired distance (allowed to stay apart).
+        // This clusters strongly-connected groups and reduces cross-graph spanning lines.
+        .distance((d: any) => {
+          if (maxLinkVal === minLinkVal) return linkDistance;
+          const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0=weak, 1=strong
+          return linkDistance * (2 - 1.5 * t); // strong→0.5x distance, weak→2x distance
+        })
+        .strength(0.7)
+        .id(d => (d as any).id))
       // -20 is less repulsive than the d3 default (-30), allowing clusters to form tighter groups
       .force("charge", d3.forceManyBody().strength(-20))
       .force("center", d3.forceCenter(width / 2, height / 2))
