@@ -163,11 +163,21 @@ const vis: ForceDirectedGraphVisualization = {
 
     console.log('[FDG] starting simulation...')
 
+    // Compute edge weight scale: normalize measure values to a 0.5–8px stroke range
+    const linkValues = links.map(l => Math.abs(l.value) || 1)
+    const maxLinkVal = Math.max(...linkValues) || 1
+    const minLinkVal = Math.min(...linkValues) || 1
+    console.log('[FDG] link value range:', minLinkVal, '–', maxLinkVal)
+
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.05)
-      .force("link", d3.forceLink(links).distance(linkDistance).id(d => (d as any).id))
-      .force("charge", d3.forceManyBody())
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      // strength(0.7) pulls connected nodes together more firmly than the auto default
+      .force("link", d3.forceLink(links).distance(linkDistance).strength(0.7).id(d => (d as any).id))
+      // -20 is less repulsive than the d3 default (-30), allowing clusters to form tighter groups
+      .force("charge", d3.forceManyBody().strength(-20))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      // collision detection keeps nodes from sitting on top of each other
+      .force("collision", (d3 as any).forceCollide().radius(radius + 2));
 
     const svg = this.svg!
       .attr("width", '100%')
@@ -188,7 +198,14 @@ const vis: ForceDirectedGraphVisualization = {
       .selectAll("line")
       .data(links)
       .enter().append("line")
-      .attr("stroke-width", d => Math.sqrt(Math.abs(d.value) || 1));
+      .attr("stroke-width", d => {
+        // Scale edge thickness by measure value (e.g. collaboration hours).
+        // If all values are the same (or no measure), every edge gets width 1.5.
+        // Otherwise scale from 0.5px (min) to 8px (max) using a sqrt curve.
+        if (maxLinkVal === minLinkVal) return 1.5;
+        const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0–1
+        return 0.5 + Math.sqrt(t) * 7.5; // 0.5–8 px
+      });
 
     var node = container.append("g")
       .attr("class", "nodes")
