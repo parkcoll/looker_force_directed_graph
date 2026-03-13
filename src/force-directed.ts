@@ -124,7 +124,7 @@ const vis: ForceDirectedGraphVisualization = {
       linkMap[key] = (linkMap[key] || 0) + val
     })
 
-    const nodes = Object.keys(groupSet).map(g => ({ id: g, group: g }))
+    const nodes: any[] = Object.keys(groupSet).map(g => ({ id: g, group: g }))
     const links = Object.keys(linkMap).map(key => {
       const sep = key.indexOf('\x00')
       const src = key.slice(0, sep)
