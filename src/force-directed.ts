@@ -57,11 +57,15 @@ const vis: ForceDirectedGraphVisualization = {
   update(data, element, config, queryResponse, details) {
     console.log('[FDG] update() called, rows:', data.length)
 
-    // Schema: dim 0 = source group, dim 1 = target group
-    //         measure 0 (optional) = edge weight (e.g. sum of collaboration hours)
+    // Supported dimension layouts (all aggregate to group-level nodes):
+    //   2 dims: sourceGroup, targetGroup
+    //   3 dims: sourceID, sourceGroup, targetID        (target group looked up via sourceGroup)
+    //   4 dims: sourceID, sourceGroup, targetID, targetGroup
+    //   5 dims: sourceID, sourceGroup, targetID, targetGroup, edgeWeight
+    // measure 0 (optional) = edge weight
     const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
-      min_dimensions: 2, max_dimensions: 2,
+      min_dimensions: 2, max_dimensions: 5,
       min_measures: 0, max_measures: 1
     })
     console.log('[FDG] handleErrors result:', errResult)
@@ -103,24 +107,61 @@ const vis: ForceDirectedGraphVisualization = {
     const colorScale = d3.scaleOrdinal()
     const color = colorScale.range(config.color_range || d3.schemeCategory10)
 
+    // Determine which dimension indices to use for source/target group and edge weight
+    // based on how many dimensions are in the query.
+    //   2 dims → [0]=srcGroup, [1]=tgtGroup
+    //   3 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID  (no tgt group: use srcGroup lookup)
+    //   4 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID, [3]=tgtGroup
+    //   5 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID, [3]=tgtGroup, [4]=edgeWeight
+    const ndim = dimensions.length
+    const srcGroupIdx  = ndim === 2 ? 0 : 1
+    const tgtGroupIdx  = ndim >= 4 ? 3 : (ndim === 2 ? 1 : -1)  // -1 = use sourceGroup lookup
+    const edgeWeightDim = ndim >= 5 ? dimensions[4] : null
+
+    console.log('[FDG] dim layout: ndim=' + ndim + ' srcGroupIdx=' + srcGroupIdx + ' tgtGroupIdx=' + tgtGroupIdx)
+
+    // First pass: build a sourceID→group lookup so target nodes can be resolved
+    // even when there is no explicit target group dimension (3-dim layout).
+    const idToGroup: {[key: string]: string} = {}
+    if (tgtGroupIdx === -1) {
+      data.forEach((row: Row) => {
+        const id = row[dimensions[0].name] && row[dimensions[0].name].value
+        const grp = row[dimensions[1].name] && row[dimensions[1].name].value
+        if (id != null && grp != null) idToGroup[String(id)] = String(grp)
+      })
+    }
+
     // Aggregate rows into group-to-group edges, summing the measure value.
-    // Handles both person-level rows and pre-aggregated group-level rows.
     const linkMap: {[key: string]: number} = {}
     const groupSet: {[key: string]: boolean} = {}
 
     data.forEach((row: Row) => {
-      const src = row[dimensions[0].name] && row[dimensions[0].name].value
-      const tgt = row[dimensions[1].name] && row[dimensions[1].name].value
-      if (src == null || tgt == null) return
-      const srcStr = String(src)
-      const tgtStr = String(tgt)
-      if (srcStr === tgtStr) return  // skip self-loops
+      const srcGrpVal = row[dimensions[srcGroupIdx].name] && row[dimensions[srcGroupIdx].name].value
+      if (srcGrpVal == null) return
+      const srcGrp = String(srcGrpVal)
 
-      groupSet[srcStr] = true
-      groupSet[tgtStr] = true
+      let tgtGrp: string
+      if (tgtGroupIdx >= 0) {
+        const tgtGrpVal = row[dimensions[tgtGroupIdx].name] && row[dimensions[tgtGroupIdx].name].value
+        if (tgtGrpVal == null) return
+        tgtGrp = String(tgtGrpVal)
+      } else {
+        // 3-dim: look up target group from the id→group map
+        const tgtIdVal = row[dimensions[2].name] && row[dimensions[2].name].value
+        if (tgtIdVal == null) return
+        tgtGrp = idToGroup[String(tgtIdVal)] || null
+        if (!tgtGrp) return
+      }
 
-      const key = srcStr + '\x00' + tgtStr
-      const val = measure ? (Number(row[measure.name].value) || 1) : 1
+      if (srcGrp === tgtGrp) return  // skip self-loops
+
+      groupSet[srcGrp] = true
+      groupSet[tgtGrp] = true
+
+      const key = srcGrp + '\x00' + tgtGrp
+      const val = edgeWeightDim
+        ? (Number(row[edgeWeightDim.name].value) || 1)
+        : measure ? (Number(row[measure.name].value) || 1) : 1
       linkMap[key] = (linkMap[key] || 0) + val
     })
 
