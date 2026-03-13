@@ -213,19 +213,27 @@ const vis: ForceDirectedGraphVisualization = {
     const simScale = Math.sqrt(width * height) / 580
 
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.028)  // slightly faster convergence for synchronous mode
+      .alphaDecay(0.028)
       .force("link", d3.forceLink(links)
         .distance((d: any) => {
-          // Heavy collab → close; light collab → far apart. Scale with viewport.
-          return (linkDistance * 0.4 + (1 - edgeT(d)) * linkDistance * 2.6) * simScale
+          // Quadratic inverse: heavy collab → very close, light collab → very far.
+          // Range: t=1 → 0.25× base (30px), t=0 → 4× base (480px).
+          const t = edgeT(d)
+          return (linkDistance * 0.25 + (1 - t) * (1 - t) * linkDistance * 3.75) * simScale
         })
-        .strength((d: any) => 0.05 + edgeT(d) * 0.7)
+        .strength((d: any) => {
+          // Cubic: weak edges (t<0.3) exert almost zero pull so they don't blur clusters.
+          // Strong edges (t>0.7) snap nodes together with near-maximum force.
+          const t = edgeT(d)
+          return t * t * t
+        })
         .id(d => (d as any).id))
-      .force("charge", d3.forceManyBody().strength(-3000 * simScale))
+      .force("charge", d3.forceManyBody().strength(-3500 * simScale))
       .force("x", d3.forceX(width / 2).strength(0.02))
       .force("y", d3.forceY(height / 2).strength(0.02))
+      // Smaller collision padding so tightly-coupled clusters can actually sit close
       .force("collision", (d3 as any).forceCollide()
-        .radius((d: any) => (nodeRadius(d) + 50) * Math.max(0.8, simScale))
+        .radius((d: any) => (nodeRadius(d) + 30) * Math.max(0.8, simScale))
         .iterations(4))
 
     const svg = this.svg!
