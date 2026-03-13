@@ -41,7 +41,7 @@ const vis: ForceDirectedGraphVisualization = {
     circle_radius: {
       type: 'string',
       label: 'Circle Radius (base)',
-      default: 20
+      default: 14
     },
     linkDistance: {
       type: 'string',
@@ -181,11 +181,11 @@ const vis: ForceDirectedGraphVisualization = {
           return linkDistance * (3 - 1.5 * t)  // strong→1.5x, weak→3x
         })
         .id(d => (d as any).id))
-      .force("charge", d3.forceManyBody().strength(-800))
-      .force("x", d3.forceX(width / 2).strength(0.05))
-      .force("y", d3.forceY(height / 2).strength(0.05 * (width / height)))
-      // Large collision so labeled nodes never overlap each other
-      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 25).iterations(3))
+      .force("charge", d3.forceManyBody().strength(-2000))
+      .force("x", d3.forceX(width / 2).strength(0.04))
+      .force("y", d3.forceY(height / 2).strength(0.04 * (width / height)))
+      // Collision radius includes space for the label below the circle
+      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 45).iterations(3))
 
     const svg = this.svg!
       .attr("width", '100%')
@@ -198,10 +198,9 @@ const vis: ForceDirectedGraphVisualization = {
 
     const container = svg.append("g")
 
-    // One arrow marker per group, colored by that group's color.
-    // refX=10 puts the arrowhead tip at the path endpoint.
-    // Paths are clipped to node borders in the tick handler so the tip
-    // lands exactly at the target circle's edge.
+    // Arrow markers — one per group color.
+    // markerUnits="userSpaceOnUse" gives a FIXED pixel size regardless of stroke-width.
+    // Without this, a 7px stroke scales an 8-unit marker to 56px — huge triangles.
     const defs = svg.append("defs")
     nodes.forEach((n: any) => {
       const c = color(n.id) as string
@@ -211,8 +210,9 @@ const vis: ForceDirectedGraphVisualization = {
         .attr("viewBox", "0 -5 10 10")
         .attr("refX", 10)
         .attr("refY", 0)
-        .attr("markerWidth", 8)
-        .attr("markerHeight", 8)
+        .attr("markerUnits", "userSpaceOnUse")  // fixed px, not scaled by stroke-width
+        .attr("markerWidth", 14)
+        .attr("markerHeight", 14)
         .attr("orient", "auto")
       marker.append("path")
         .attr("d", "M0,-5L10,0L0,5")
@@ -250,19 +250,32 @@ const vis: ForceDirectedGraphVisualization = {
       .attr("stroke", "#fff")
       .attr("stroke-width", 2.5)
 
-    // Label inside the circle — truncated to fit
+    // Label below the circle — white halo stroke makes it readable over any background
+    const labelY = (d: any) => nodeRadius(d) + 14
+    const labelText = (d: any) => d.id.length > 22 ? d.id.slice(0, 21) + '…' : d.id
+
+    // White halo (rendered first, under the colored text)
     node.append("text")
       .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
+      .attr("y", labelY)
       .style("font-size", config.font_size || "11px")
-      .style("fill", config.font_color || "#fff")
       .style("font-weight", config.font_weight || "bold")
       .style("pointer-events", "none")
-      .text((d: any) => {
-        const r = nodeRadius(d)
-        const maxChars = Math.max(3, Math.floor(r / 4))
-        return d.id.length > maxChars ? d.id.slice(0, maxChars - 1) + '…' : d.id
-      })
+      .attr("stroke", "white")
+      .attr("stroke-width", "4px")
+      .attr("paint-order", "stroke")
+      .style("fill", "#333")
+      .text(labelText)
+
+    // Colored text on top
+    node.append("text")
+      .attr("text-anchor", "middle")
+      .attr("y", labelY)
+      .style("font-size", config.font_size || "11px")
+      .style("font-weight", config.font_weight || "bold")
+      .style("pointer-events", "none")
+      .style("fill", "#333")
+      .text(labelText)
 
     // Tooltip: full name on hover
     node.append("title").text((d: any) =>
