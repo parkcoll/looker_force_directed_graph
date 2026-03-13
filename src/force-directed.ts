@@ -77,8 +77,8 @@ const vis: ForceDirectedGraphVisualization = {
 
     this.svg.selectAll("*").remove()
 
-    const height = (element.clientHeight || element.parentElement.clientHeight || 500) + 20
-    const width = element.clientWidth || element.parentElement.clientWidth || 800
+    const height = element.clientHeight || (element.parentElement && element.parentElement.clientHeight) || 500
+    const width = element.clientWidth || (element.parentElement && element.parentElement.clientWidth) || 800
 
     const radius = Number(config.circle_radius) || 20
     const linkDistance = Number(config.linkDistance) || 120
@@ -191,16 +191,10 @@ const vis: ForceDirectedGraphVisualization = {
       return `${d.sourceId} → ${d.targetId}\n${Math.round(d.value * 10) / 10} ${unit}`
     }
 
-    // Scale all spatial simulation parameters to viewport area so the graph
-    // fills the available space on any screen size.
-    // Reference area ~580² (≈336k px²) → simScale = 1 at that size.
+    // Scale spatial parameters to viewport area so the simulation naturally
+    // produces a graph sized to the available space.
+    // Reference area 580² ≈ 336k px² → simScale = 1 at that size.
     const simScale = Math.sqrt(width * height) / 580
-
-    // Aspect ratio drives the ratio of horizontal vs vertical centering strength.
-    // On wide screens the X force is stronger, stretching the layout to fill width.
-    const ar = width / Math.max(height, 1)
-    const xStrength = 0.022 * Math.sqrt(ar)       // stronger X on wide viewports
-    const yStrength = 0.022 / Math.sqrt(ar)        // weaker Y so height isn't wasted
 
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.015)
@@ -212,8 +206,8 @@ const vis: ForceDirectedGraphVisualization = {
         .strength((d: any) => 0.05 + edgeT(d) * 0.7)
         .id(d => (d as any).id))
       .force("charge", d3.forceManyBody().strength(-3000 * simScale))
-      .force("x", d3.forceX(width / 2).strength(xStrength))
-      .force("y", d3.forceY(height / 2).strength(yStrength))
+      .force("x", d3.forceX(width / 2).strength(0.02))
+      .force("y", d3.forceY(height / 2).strength(0.02))
       .force("collision", (d3 as any).forceCollide()
         .radius((d: any) => (nodeRadius(d) + 50) * Math.max(0.8, simScale))
         .iterations(4))
@@ -458,11 +452,41 @@ const vis: ForceDirectedGraphVisualization = {
 
     simulation.on("end", () => {
       console.log('[FDG] ended after', tickCount, 'ticks')
-      const pad = 60
-      const xs = nodes.map((d: any) => d.x).filter((v: number) => !isNaN(v))
-      const ys = nodes.map((d: any) => d.y).filter((v: number) => !isNaN(v))
+
+      const getXs = () => nodes.map((d: any) => d.x).filter((v: number) => !isNaN(v))
+      const getYs = () => nodes.map((d: any) => d.y).filter((v: number) => !isNaN(v))
+      let xs = getXs(), ys = getYs()
       if (!xs.length) return
 
+      const gx0 = Math.min(...xs), gx1 = Math.max(...xs)
+      const gy0 = Math.min(...ys), gy1 = Math.max(...ys)
+      const graphW = gx1 - gx0 || 1
+      const graphH = gy1 - gy0 || 1
+      const viewAR  = width / Math.max(height, 1)
+      const graphAR = graphW / graphH
+
+      // After the isotropic simulation, stretch node positions so the graph
+      // aspect ratio matches the viewport. This fills the available space on
+      // any screen shape without distorting the cluster structure.
+      if (viewAR > graphAR * 1.15) {
+        // Viewport is wider than the graph → stretch nodes horizontally
+        const stretch = Math.min(viewAR / graphAR * 0.9, 4)
+        const midX = (gx0 + gx1) / 2
+        nodes.forEach((n: any) => { n.x = midX + (n.x - midX) * stretch })
+      } else if (graphAR > viewAR * 1.15) {
+        // Viewport is taller than the graph → stretch nodes vertically
+        const stretch = Math.min(graphAR / viewAR * 0.9, 4)
+        const midY = (gy0 + gy1) / 2
+        nodes.forEach((n: any) => { n.y = midY + (n.y - midY) * stretch })
+      }
+
+      // Redraw with stretched positions, then auto-fit
+      link.attr("d", edgePath)
+      linkHit.attr("d", edgePath)
+      node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
+
+      const pad = 70
+      xs = getXs(); ys = getYs()
       const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad
       const y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad
       const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.95
