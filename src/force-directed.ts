@@ -175,7 +175,13 @@ const vis: ForceDirectedGraphVisualization = {
     const edgeStrokeWidth = (d: any) => {
       if (maxLinkVal === minLinkVal) return 3
       const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-      return 1 + t * t * 14  // 1–15 px, heavy quadratic bias toward high values
+      return 1.5 + t * t * 13  // 1.5–14.5 px, heavy quadratic bias toward high values
+    }
+
+    // Arrow marker size scales with stroke width so it stays visible on thick edges
+    const arrowSize = (d: any) => {
+      const sw = edgeStrokeWidth(d)
+      return Math.max(10, sw * 1.8)  // minimum 10px, grows with stroke
     }
 
     // Edge label: show rounded value + unit label if available
@@ -185,21 +191,30 @@ const vis: ForceDirectedGraphVisualization = {
       return `${d.sourceId} → ${d.targetId}\n${Math.round(d.value * 10) / 10} ${unit}`
     }
 
-    // Force simulation — tuned for small number of large labeled nodes
+    // Force simulation — tuned to break circular symmetry:
+    //  - variable link distance + strength so heavy-collab pairs cluster tightly
+    //  - stronger charge to spread thin-connection nodes to the periphery
+    //  - weaker centering so the layout can stretch asymmetrically
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.02)
+      .alphaDecay(0.015)  // slower decay → more time to find an asymmetric optimum
       .force("link", d3.forceLink(links)
         .distance((d: any) => {
           if (maxLinkVal === minLinkVal) return linkDistance
           const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-          return linkDistance * (3 - 1.5 * t)  // strong→1.5x, weak→3x
+          // Heavy collab → very close; light collab → far apart
+          return linkDistance * 0.4 + (1 - t) * linkDistance * 2.6
+        })
+        .strength((d: any) => {
+          if (maxLinkVal === minLinkVal) return 0.4
+          const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
+          return 0.05 + t * 0.7  // heavier edges pull much harder → clusters form
         })
         .id(d => (d as any).id))
-      .force("charge", d3.forceManyBody().strength(-2000))
-      .force("x", d3.forceX(width / 2).strength(0.04))
-      .force("y", d3.forceY(height / 2).strength(0.04 * (width / height)))
+      .force("charge", d3.forceManyBody().strength(-3500))
+      .force("x", d3.forceX(width / 2).strength(0.02))   // weaker centering
+      .force("y", d3.forceY(height / 2).strength(0.02 * (width / height)))
       // Collision radius includes space for the label below the circle
-      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 45).iterations(3))
+      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 55).iterations(4))
 
     const svg = this.svg!
       .attr("width", '100%')
@@ -212,21 +227,23 @@ const vis: ForceDirectedGraphVisualization = {
 
     const container = svg.append("g")
 
-    // Arrow markers — one per group color.
-    // markerUnits="userSpaceOnUse" gives a FIXED pixel size regardless of stroke-width.
-    // Without this, a 7px stroke scales an 8-unit marker to 56px — huge triangles.
+    // Arrow markers — one per link, sized to match that link's stroke width.
+    // markerUnits="userSpaceOnUse" gives a FIXED pixel size regardless of stroke-width,
+    // so we manually scale each marker by the computed stroke width.
     const defs = svg.append("defs")
-    nodes.forEach((n: any) => {
-      const c = color(n.id) as string
-      const safeId = 'fdg-arrow-' + n.id.replace(/[^a-zA-Z0-9]/g, '_')
+    links.forEach((lnk: any) => {
+      const c = color(lnk.sourceId) as string
+      const mSize = arrowSize(lnk)
+      const safeId = 'fdg-arrow-' + lnk.sourceId.replace(/[^a-zA-Z0-9]/g, '_')
+                   + '-' + lnk.targetId.replace(/[^a-zA-Z0-9]/g, '_')
       const marker = defs.append("marker")
         .attr("id", safeId)
         .attr("viewBox", "0 -5 10 10")
         .attr("refX", 10)
         .attr("refY", 0)
         .attr("markerUnits", "userSpaceOnUse")  // fixed px, not scaled by stroke-width
-        .attr("markerWidth", 14)
-        .attr("markerHeight", 14)
+        .attr("markerWidth", mSize)
+        .attr("markerHeight", mSize)
         .attr("orient", "auto")
       marker.append("path")
         .attr("d", "M0,-5L10,0L0,5")
@@ -244,7 +261,7 @@ const vis: ForceDirectedGraphVisualization = {
       .attr("stroke-opacity", 0.7)
       .attr("stroke-width", edgeStrokeWidth)
       .attr("marker-end", (d: any) =>
-        `url(#fdg-arrow-${d.sourceId.replace(/[^a-zA-Z0-9]/g, '_')})`
+        `url(#fdg-arrow-${d.sourceId.replace(/[^a-zA-Z0-9]/g, '_')}-${d.targetId.replace(/[^a-zA-Z0-9]/g, '_')})`
       )
 
     // Invisible wider hit-area paths for edge hover — layered on top of the visible edges
@@ -409,9 +426,10 @@ const vis: ForceDirectedGraphVisualization = {
       const dx = tx - sx, dy = ty - sy
       const len = Math.sqrt(dx * dx + dy * dy) || 1
 
-      // Clip path to node borders so arrowhead tip lands at the circle edge
+      // Clip path to node borders so arrowhead tip lands at the circle edge.
+      // Pull endpoint back by ~half the marker size so arrow doesn't overlap the circle.
       const srcR = nodeRadius(d.source) + 2
-      const tgtR = nodeRadius(d.target) + 3
+      const tgtR = nodeRadius(d.target) + arrowSize(d) * 0.55
       const startX = sx + (dx / len) * srcR
       const startY = sy + (dy / len) * srcR
       const endX = tx - (dx / len) * tgtR
