@@ -171,6 +171,20 @@ const vis: ForceDirectedGraphVisualization = {
     const maxDegree = Math.max(1, ...Object.keys(degree).map(k => degree[k]))
     const nodeRadius = (d: any) => radius + Math.sqrt((degree[d.id] || 0) / maxDegree) * radius * 1.5
 
+    // Stroke width: quadratic curve gives more visual separation at the high end
+    const edgeStrokeWidth = (d: any) => {
+      if (maxLinkVal === minLinkVal) return 3
+      const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
+      return 1 + t * t * 14  // 1–15 px, heavy quadratic bias toward high values
+    }
+
+    // Edge label: show rounded value + unit label if available
+    const edgeLabel = (d: any) => {
+      const unit = edgeWeightDim ? edgeWeightDim.label_short || edgeWeightDim.label || 'hrs'
+                                 : measure ? (measure.label_short || measure.label || 'value') : 'value'
+      return `${d.sourceId} → ${d.targetId}\n${Math.round(d.value * 10) / 10} ${unit}`
+    }
+
     // Force simulation — tuned for small number of large labeled nodes
     const simulation = d3.forceSimulation(nodes)
       .alphaDecay(0.02)
@@ -220,21 +234,91 @@ const vis: ForceDirectedGraphVisualization = {
     })
 
     // Directed edges — colored by source group, arrow at target border
-    const link = container.append("g")
-      .attr("fill", "none")
-      .selectAll("path")
+    const linkG = container.append("g").attr("fill", "none")
+
+    const link = linkG.selectAll("path.fdg-edge")
       .data(links)
       .enter().append("path")
+      .attr("class", "fdg-edge")
       .attr("stroke", (d: any) => color(d.sourceId) as string)
-      .attr("stroke-opacity", 0.6)
-      .attr("stroke-width", (d: any) => {
-        if (maxLinkVal === minLinkVal) return 2
-        const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-        return 1 + Math.sqrt(t) * 6  // 1–7 px
-      })
+      .attr("stroke-opacity", 0.7)
+      .attr("stroke-width", edgeStrokeWidth)
       .attr("marker-end", (d: any) =>
         `url(#fdg-arrow-${d.sourceId.replace(/[^a-zA-Z0-9]/g, '_')})`
       )
+
+    // Invisible wider hit-area paths for edge hover — layered on top of the visible edges
+    const linkHit = linkG.selectAll("path.fdg-edge-hit")
+      .data(links)
+      .enter().append("path")
+      .attr("class", "fdg-edge-hit")
+      .attr("stroke", "transparent")
+      .attr("stroke-width", 20)
+      .attr("fill", "none")
+      .style("cursor", "pointer")
+
+    // Tooltip div (appended to element, not svg, so it floats above)
+    const tooltip = d3.select(element).append("div")
+      .style("position", "absolute")
+      .style("background", "rgba(0,0,0,0.75)")
+      .style("color", "#fff")
+      .style("padding", "6px 10px")
+      .style("border-radius", "4px")
+      .style("font-size", "12px")
+      .style("pointer-events", "none")
+      .style("white-space", "pre")
+      .style("opacity", 0)
+      .style("transition", "opacity 0.15s")
+
+    linkHit
+      .on("mouseover", function(d: any) {
+        tooltip
+          .style("opacity", 1)
+          .text(edgeLabel(d))
+      })
+      .on("mousemove", function() {
+        const [mx, my] = d3.mouse(element as any)
+        tooltip
+          .style("left", (mx + 14) + "px")
+          .style("top",  (my - 28) + "px")
+      })
+      .on("mouseout", function() {
+        tooltip.style("opacity", 0)
+      })
+
+    // ── Node click-to-highlight state ──────────────────────────────────────
+    let selectedNode: string | null = null
+
+    const applyHighlight = () => {
+      if (selectedNode === null) {
+        // Reset everything
+        node.select("circle")
+          .attr("fill", (d: any) => color(d.id) as string)
+          .attr("opacity", 1)
+        node.selectAll("text")
+          .style("fill", "#333")
+          .attr("opacity", 1)
+        link.attr("stroke-opacity", 0.7)
+            .attr("opacity", 1)
+        linkHit.attr("opacity", 1)
+      } else {
+        // Dim non-selected nodes
+        node.select("circle")
+          .attr("fill", (d: any) =>
+            d.id === selectedNode ? color(d.id) as string : "#ccc"
+          )
+          .attr("opacity", (d: any) => d.id === selectedNode ? 1 : 0.4)
+        node.selectAll("text")
+          .style("fill", (d: any) => d.id === selectedNode ? "#333" : "#aaa")
+          .attr("opacity", (d: any) => d.id === selectedNode ? 1 : 0.4)
+        // Show only edges leaving the selected node at full opacity
+        link
+          .attr("stroke-opacity", (d: any) => d.sourceId === selectedNode ? 0.85 : 0)
+          .attr("opacity",        (d: any) => d.sourceId === selectedNode ? 1 : 0)
+        linkHit
+          .attr("opacity", (d: any) => d.sourceId === selectedNode ? 1 : 0)
+      }
+    }
 
     // Group nodes
     const node = container.append("g")
@@ -249,6 +333,7 @@ const vis: ForceDirectedGraphVisualization = {
       .attr("fill", (d: any) => color(d.id) as string)
       .attr("stroke", "#fff")
       .attr("stroke-width", 2.5)
+      .style("cursor", "pointer")
 
     // Label below the circle — white halo stroke makes it readable over any background
     const labelY = (d: any) => nodeRadius(d) + 14
@@ -282,35 +367,72 @@ const vis: ForceDirectedGraphVisualization = {
       `${d.id}\nTotal connections: ${degree[d.id] || 0}`
     )
 
+    // Click node to highlight; click same node or background to deselect
+    node.on("click", function(d: any) {
+      d3.event.stopPropagation()
+      selectedNode = selectedNode === d.id ? null : d.id
+      applyHighlight()
+    })
+
+    // Hover over dimmed nodes: temporarily restore their color
+    node
+      .on("mouseover.highlight", function(d: any) {
+        if (selectedNode === null || d.id === selectedNode) return
+        d3.select(this).select("circle")
+          .attr("fill", color(d.id) as string)
+          .attr("opacity", 0.85)
+        d3.select(this).selectAll("text")
+          .style("fill", "#333")
+          .attr("opacity", 0.85)
+      })
+      .on("mouseout.highlight", function(d: any) {
+        if (selectedNode === null || d.id === selectedNode) return
+        d3.select(this).select("circle")
+          .attr("fill", "#ccc")
+          .attr("opacity", 0.4)
+        d3.select(this).selectAll("text")
+          .style("fill", "#aaa")
+          .attr("opacity", 0.4)
+      })
+
+    svg.on("click", function() {
+      if (selectedNode !== null) {
+        selectedNode = null
+        applyHighlight()
+      }
+    })
+
+    // Shared path geometry computed each tick
+    const edgePath = (d: any) => {
+      const sx = d.source.x, sy = d.source.y
+      const tx = d.target.x, ty = d.target.y
+      const dx = tx - sx, dy = ty - sy
+      const len = Math.sqrt(dx * dx + dy * dy) || 1
+
+      // Clip path to node borders so arrowhead tip lands at the circle edge
+      const srcR = nodeRadius(d.source) + 2
+      const tgtR = nodeRadius(d.target) + 3
+      const startX = sx + (dx / len) * srcR
+      const startY = sy + (dy / len) * srcR
+      const endX = tx - (dx / len) * tgtR
+      const endY = ty - (dy / len) * tgtR
+
+      // Quadratic bezier with perpendicular arc offset.
+      // For A→B the offset is in one direction; for B→A the reversed dx/dy
+      // naturally produces an offset in the opposite direction — so
+      // bidirectional pairs form two distinct visible arcs.
+      const arc = Math.min(len * 0.35, 80)
+      const cx = (sx + tx) / 2 - (dy / len) * arc
+      const cy = (sy + ty) / 2 + (dx / len) * arc
+
+      return `M${startX},${startY}Q${cx},${cy} ${endX},${endY}`
+    }
+
     var tickCount = 0
     simulation.on("tick", () => {
       tickCount++
-
-      link.attr("d", (d: any) => {
-        const sx = d.source.x, sy = d.source.y
-        const tx = d.target.x, ty = d.target.y
-        const dx = tx - sx, dy = ty - sy
-        const len = Math.sqrt(dx * dx + dy * dy) || 1
-
-        // Clip path to node borders so arrowhead tip lands at the circle edge
-        const srcR = nodeRadius(d.source) + 2
-        const tgtR = nodeRadius(d.target) + 3
-        const startX = sx + (dx / len) * srcR
-        const startY = sy + (dy / len) * srcR
-        const endX = tx - (dx / len) * tgtR
-        const endY = ty - (dy / len) * tgtR
-
-        // Quadratic bezier with perpendicular arc offset.
-        // For A→B the offset is in one direction; for B→A the reversed dx/dy
-        // naturally produces an offset in the opposite direction — so
-        // bidirectional pairs form two distinct visible arcs.
-        const arc = Math.min(len * 0.35, 80)
-        const cx = (sx + tx) / 2 - (dy / len) * arc
-        const cy = (sy + ty) / 2 + (dx / len) * arc
-
-        return `M${startX},${startY}Q${cx},${cy} ${endX},${endY}`
-      })
-
+      link.attr("d", edgePath)
+      linkHit.attr("d", edgePath)
       node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
     })
 
