@@ -23,45 +23,30 @@ const vis: ForceDirectedGraphVisualization = {
       display: 'colors',
       default: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
     },
-    link_color: {
-      type: 'string',
-      label: 'Link Color',
-      default: ['black']
-    },
     font_size: {
       type: 'string',
       label: 'Font Size',
-      default: ['10px']
+      default: ['12px']
     },
     font_color: {
       type: 'string',
       label: 'Font Color',
-      default: ['black']
+      default: ['#fff']
     },
     font_weight: {
       type: 'string',
       label: 'Font Weight',
-      default: ['normal']
+      default: ['bold']
     },
     circle_radius: {
       type: 'string',
-      label: 'Circle Radius',
-      default: 5
+      label: 'Circle Radius (base)',
+      default: 20
     },
     linkDistance: {
       type: 'string',
       label: 'Link Distance',
-      default: 30
-    },
-    labels : {
-      type: 'boolean',
-      label: 'Show Labels',
-      default: false
-    },
-    labelTypes: {
-      type: 'string',
-      label: 'Label Node Types',
-      default: []
+      default: 120
     }
   },
   create(element, config) {
@@ -70,291 +55,247 @@ const vis: ForceDirectedGraphVisualization = {
     console.log('[FDG] create() called')
   },
   update(data, element, config, queryResponse, details) {
-    console.log('[FDG] update() called')
-    console.log('[FDG] data rows:', data.length)
-    console.log('[FDG] element size:', element.clientWidth, 'x', element.clientHeight)
-    console.log('[FDG] dimensions:', queryResponse.fields.dimension_like.map(d => d.name))
-    console.log('[FDG] measures:', queryResponse.fields.measure_like.map(m => m.name))
-    console.log('[FDG] config.color_range:', config.color_range)
+    console.log('[FDG] update() called, rows:', data.length)
 
+    // Schema: dim 0 = source group, dim 1 = target group
+    //         measure 0 (optional) = edge weight (e.g. sum of collaboration hours)
     const errResult = handleErrors(this, queryResponse, {
       min_pivots: 0, max_pivots: 0,
-      min_dimensions: 3, max_dimensions: 4,
-      min_measures: 0, max_measures: 99
+      min_dimensions: 2, max_dimensions: 2,
+      min_measures: 0, max_measures: 1
     })
     console.log('[FDG] handleErrors result:', errResult)
     if (!errResult) return
 
     if (!config.color_range) {
-      console.log('[FDG] no color_range in config, applying defaults')
       config.color_range = this.options.color_range.default
     }
 
-    this.svg.selectAll("*").remove();
+    this.svg.selectAll("*").remove()
 
     const height = (element.clientHeight || element.parentElement.clientHeight || 500) + 20
     const width = element.clientWidth || element.parentElement.clientWidth || 800
-    console.log('[FDG] computed size:', width, 'x', height)
 
-    var radius = Number(config.circle_radius) || 5
-    var linkDistance = Number(config.linkDistance) || 30
+    const radius = Number(config.circle_radius) || 20
+    const linkDistance = Number(config.linkDistance) || 120
 
     const drag = simulation => {
-       function dragstarted(d) {
-          if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x; d.fy = d.y;
-       }
-       function dragged(d) {
-          d.fx = d3.event.x; d.fy = d3.event.y;
-       }
-       function dragended(d) {
-          if (!d3.event.active) simulation.alphaTarget(0);
-          d.fx = null; d.fy = null;
-       }
-       return d3.drag()
-         .on("start", dragstarted)
-         .on("drag", dragged)
-         .on("end", dragended);
+      function dragstarted(d) {
+        if (!d3.event.active) simulation.alphaTarget(0.3).restart()
+        d.fx = d.x; d.fy = d.y
+      }
+      function dragged(d) {
+        d.fx = d3.event.x; d.fy = d3.event.y
+      }
+      function dragended(d) {
+        if (!d3.event.active) simulation.alphaTarget(0)
+        d.fx = null; d.fy = null
+      }
+      return d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
     }
 
     const dimensions = queryResponse.fields.dimension_like
     const measure = queryResponse.fields.measure_like[0]
-    // Dimension layout (target group removed — now optional 4th dim is edge weight):
-    //   dim 0: source node ID
-    //   dim 1: source group  (colors ALL nodes that appear as a source)
-    //   dim 2: target node ID
-    //   dim 3: edge weight dimension (optional — e.g. collaboration hours)
-    // Falls back to first measure, then to 1 if neither is present.
-    const edgeWeightDim = dimensions.length >= 4 ? dimensions[3] : null
-    console.log('[FDG] edge weight source:', edgeWeightDim ? ('dim:' + edgeWeightDim.name) : measure ? ('measure:' + measure.name) : 'none (default 1)')
 
     const colorScale = d3.scaleOrdinal()
-    var color = colorScale.range(config.color_range || d3.schemeCategory10)
+    const color = colorScale.range(config.color_range || d3.schemeCategory10)
 
-    // First pass: build a group lookup from source ID → source group.
-    // Only nodes that appear as a SOURCE get a real group/color.
-    // Target-only nodes (never a source) stay as '__unknown__' (rendered gray).
-    const groupMap: {[key: string]: string} = {}
-    data.forEach((row: Row) => {
-      const srcVal = row[dimensions[0].name] && row[dimensions[0].name].value
-      const srcGroup = row[dimensions[1].name] && row[dimensions[1].name].value
-      if (srcVal != null && srcGroup != null) {
-        groupMap[String(srcVal)] = String(srcGroup)
-      }
-    })
-
-    var nodes_unique = []
-    var nodes = []
-    var links = []
+    // Aggregate rows into group-to-group edges, summing the measure value.
+    // Handles both person-level rows and pre-aggregated group-level rows.
+    const linkMap: {[key: string]: number} = {}
+    const groupSet: {[key: string]: boolean} = {}
 
     data.forEach((row: Row) => {
-       const srcVal = row[dimensions[0].name] && row[dimensions[0].name].value
-       const tgtVal = row[dimensions[2].name] && row[dimensions[2].name].value
-       if (srcVal == null || tgtVal == null) return
+      const src = row[dimensions[0].name] && row[dimensions[0].name].value
+      const tgt = row[dimensions[1].name] && row[dimensions[1].name].value
+      if (src == null || tgt == null) return
+      const srcStr = String(src)
+      const tgtStr = String(tgt)
+      if (srcStr === tgtStr) return  // skip self-loops
 
-       if (nodes_unique.indexOf(srcVal) == -1) {
-          nodes_unique.push(srcVal);
-          nodes.push({ id: srcVal, group: groupMap[String(srcVal)] || '__unknown__' });
-       }
-       if (nodes_unique.indexOf(tgtVal) == -1) {
-          nodes_unique.push(tgtVal);
-          // Target nodes only get a color if they also appear as a source in this dataset
-          nodes.push({ id: tgtVal, group: groupMap[String(tgtVal)] || '__unknown__' });
-       }
-       const edgeWeight = edgeWeightDim
-         ? (Number(row[edgeWeightDim.name].value) || 1)
-         : measure ? (Number(row[measure.name].value) || 1)
-         : 1
-       links.push({ source: srcVal, target: tgtVal, value: edgeWeight });
+      groupSet[srcStr] = true
+      groupSet[tgtStr] = true
+
+      const key = srcStr + '\x00' + tgtStr
+      const val = measure ? (Number(row[measure.name].value) || 1) : 1
+      linkMap[key] = (linkMap[key] || 0) + val
     })
 
-    console.log('[FDG] nodes before filter:', nodes.length)
-    console.log('[FDG] links:', links.length)
-    if (nodes.length > 0) console.log('[FDG] sample node:', JSON.stringify(nodes[0]))
-    if (links.length > 0) console.log('[FDG] sample link:', JSON.stringify(links[0]))
+    const nodes = Object.keys(groupSet).map(g => ({ id: g, group: g }))
+    const links = Object.keys(linkMap).map(key => {
+      const sep = key.indexOf('\x00')
+      const src = key.slice(0, sep)
+      const tgt = key.slice(sep + 1)
+      return { source: src, target: tgt, value: linkMap[key], sourceId: src, targetId: tgt }
+    })
 
-    // Remove isolated nodes
-    const connectedIds = new Set(
-      links.reduce((acc, l) => { acc.push(l.source, l.target); return acc; }, [])
-    )
-    nodes = nodes.filter(n => connectedIds.has(n.id))
-    console.log('[FDG] nodes after filter:', nodes.length)
+    console.log('[FDG] groups:', nodes.length, 'directed edges:', links.length)
 
     if (nodes.length === 0) {
-      console.log('[FDG] ERROR: no connected nodes — check dimension field mapping')
-      this.addError({ title: 'No data', message: 'No connected nodes found. Check for null values in dimensions.' })
+      this.addError({ title: 'No data', message: 'No group-to-group connections found. Check that dimensions 1 and 2 are group fields.' })
       return
     }
 
-    console.log('[FDG] starting simulation...')
-
-    // Compute edge weight scale: normalize measure values to a 0.5–8px stroke range
-    const linkValues = links.map(l => Math.abs(l.value) || 1)
+    // Edge weight range for stroke scaling
+    const linkValues = links.map(l => l.value)
     const maxLinkVal = Math.max(...linkValues) || 1
     const minLinkVal = Math.min(...linkValues) || 1
-    console.log('[FDG] link value range:', minLinkVal, '–', maxLinkVal)
+    console.log('[FDG] edge value range:', minLinkVal, '-', maxLinkVal)
 
-    // Compute total degree (in + out) per node so hub nodes that originate
-    // many edges are sized correctly, not just nodes that receive many edges.
+    // Node size by total degree (in + out connections)
     const degree: {[key: string]: number} = {}
-    links.forEach((l: any) => {
-      const srcId = l.source as string
-      const tgtId = l.target as string
-      degree[srcId] = (degree[srcId] || 0) + 1
-      degree[tgtId] = (degree[tgtId] || 0) + 1
+    links.forEach(l => {
+      degree[l.sourceId] = (degree[l.sourceId] || 0) + 1
+      degree[l.targetId] = (degree[l.targetId] || 0) + 1
     })
     const maxDegree = Math.max(1, ...Object.keys(degree).map(k => degree[k]))
-    // Scale node radius: min = base radius, max = 3× base radius (sqrt curve)
-    const nodeRadius = (d: any) => radius + Math.sqrt((degree[d.id] || 0) / maxDegree) * radius * 2
-    console.log('[FDG] max degree:', maxDegree)
+    const nodeRadius = (d: any) => radius + Math.sqrt((degree[d.id] || 0) / maxDegree) * radius * 1.5
 
+    // Force simulation — tuned for small number of large labeled nodes
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.05)
+      .alphaDecay(0.02)
       .force("link", d3.forceLink(links)
-        // High-collaboration pairs: shorter desired distance (pulled close).
-        // Low-collaboration pairs: longer desired distance (stay further apart).
-        // Minimum is 3x node radius so overlapping edges are never too cramped.
         .distance((d: any) => {
-          if (maxLinkVal === minLinkVal) return linkDistance;
-          const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0=weak, 1=strong
-          return Math.max(linkDistance * (1 + 2 * (1 - t)), radius * 3); // strong→1x, weak→3x
+          if (maxLinkVal === minLinkVal) return linkDistance
+          const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
+          return linkDistance * (3 - 1.5 * t)  // strong→1.5x, weak→3x
         })
-        // No explicit strength — use d3's default: 1/min(sourceDegree, targetDegree).
-        // This prevents hub nodes from collapsing into a "black hole":
-        // a node with 50 connections gets strength 0.02/link instead of a fixed 0.7.
         .id(d => (d as any).id))
-      // Moderate repulsion — enough breathing room without extreme spreading.
-      .force("charge", d3.forceManyBody().strength(-50))
-      // forceX/forceY instead of forceCenter:
-      //   • Applies proportional spring forces, so disconnected clusters are pulled
-      //     back toward center the further they drift (forceCenter can't do this).
-      //   • Aspect-ratio-adjusted strengths fill the canvas shape:
-      //     stronger y-centering compresses height, letting nodes spread wider in x
-      //     to match the typically landscape viewport.
-      .force("x", d3.forceX(width / 2).strength(0.04))
-      .force("y", d3.forceY(height / 2).strength(0.04 * (width / height)))
-      // Enforce a hard minimum gap between node surfaces.
-      // Uses the per-node radius so large hub nodes get more personal space.
-      // iterations(2) gives more accurate resolution for dense clusters.
-      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 3).iterations(2));
+      .force("charge", d3.forceManyBody().strength(-800))
+      .force("x", d3.forceX(width / 2).strength(0.05))
+      .force("y", d3.forceY(height / 2).strength(0.05 * (width / height)))
+      // Large collision so labeled nodes never overlap each other
+      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 25).iterations(3))
 
     const svg = this.svg!
       .attr("width", '100%')
       .attr("height", height)
 
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.001, 8])
-      .on("zoom", function() {
-        container.attr("transform", d3.event.transform)
-      })
+      .scaleExtent([0.05, 8])
+      .on("zoom", function() { container.attr("transform", d3.event.transform) })
     svg.call(zoom as any)
 
     const container = svg.append("g")
 
+    // One arrow marker per group, colored by that group's color.
+    // refX=10 puts the arrowhead tip at the path endpoint.
+    // Paths are clipped to node borders in the tick handler so the tip
+    // lands exactly at the target circle's edge.
+    const defs = svg.append("defs")
+    nodes.forEach((n: any) => {
+      const c = color(n.id) as string
+      const safeId = 'fdg-arrow-' + n.id.replace(/[^a-zA-Z0-9]/g, '_')
+      const marker = defs.append("marker")
+        .attr("id", safeId)
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 10)
+        .attr("refY", 0)
+        .attr("markerWidth", 8)
+        .attr("markerHeight", 8)
+        .attr("orient", "auto")
+      marker.append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", c)
+    })
+
+    // Directed edges — colored by source group, arrow at target border
     const link = container.append("g")
       .attr("fill", "none")
-      .attr("stroke", config.link_color || '#bbb')  // light gray by default
-      .attr("stroke-opacity", 0.25)
       .selectAll("path")
       .data(links)
       .enter().append("path")
-      .attr("stroke-width", d => {
-        // Scale edge thickness by measure value (e.g. collaboration hours).
-        // If all values are the same (or no measure), every edge gets width 1.5.
-        // Otherwise scale from 0.5px (min) to 6px (max) using a sqrt curve.
-        if (maxLinkVal === minLinkVal) return 1.5;
-        const t = (Math.abs(d.value) - minLinkVal) / (maxLinkVal - minLinkVal); // 0–1
-        return 0.5 + Math.sqrt(t) * 5.5; // 0.5–6 px
-      });
+      .attr("stroke", (d: any) => color(d.sourceId) as string)
+      .attr("stroke-opacity", 0.6)
+      .attr("stroke-width", (d: any) => {
+        if (maxLinkVal === minLinkVal) return 2
+        const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
+        return 1 + Math.sqrt(t) * 6  // 1–7 px
+      })
+      .attr("marker-end", (d: any) =>
+        `url(#fdg-arrow-${d.sourceId.replace(/[^a-zA-Z0-9]/g, '_')})`
+      )
 
-    var node = container.append("g")
-      .attr("class", "nodes")
+    // Group nodes
+    const node = container.append("g")
       .selectAll(".node")
       .data(nodes)
       .enter().append("g")
       .attr("class", "node")
-      .call(drag(simulation));
+      .call(drag(simulation))
 
     node.append("circle")
+      .attr("r", (d: any) => nodeRadius(d))
+      .attr("fill", (d: any) => color(d.id) as string)
       .attr("stroke", "#fff")
-      .attr("stroke-width", 1.5)
-      .attr("r", (d: any) => nodeRadius(d))  // size by total degree
-      // Target-only nodes (never a source in this dataset) rendered as light gray.
-      // All other nodes get their source group color.
-      .attr("fill", (d: any) => d.group === '__unknown__' ? '#d0d0d0' : color(d.group))
+      .attr("stroke-width", 2.5)
 
-    var labelTypes = [];
-    if (config.labelTypes && config.labelTypes.length) {
-      labelTypes = config.labelTypes.split(',')
-    }
+    // Label inside the circle — truncated to fit
+    node.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .style("font-size", config.font_size || "11px")
+      .style("fill", config.font_color || "#fff")
+      .style("font-weight", config.font_weight || "bold")
+      .style("pointer-events", "none")
+      .text((d: any) => {
+        const r = nodeRadius(d)
+        const maxChars = Math.max(3, Math.floor(r / 4))
+        return d.id.length > maxChars ? d.id.slice(0, maxChars - 1) + '…' : d.id
+      })
 
-    if (config.labelTypes && config.labelTypes.length) {
-      node.append("text")
-        .style("font-size", config.font_size)
-        .style("fill", config.font_color)
-        .attr("y", (-1 * config.circle_radius - 3) + "px")
-        .style("text-anchor", "middle")
-        .style("font-weight", config.font_weight)
-        .text(function(d) { return labelTypes.indexOf(d.group) > -1 ? d.id : null });
-    } else if (config.labels) {
-      node.append("text")
-        .style("font-size", config.font_size)
-        .style("fill", config.font_color)
-        .attr("y", (-1 * config.circle_radius - 3) + "px")
-        .style("text-anchor", "middle")
-        .style("font-weight", config.font_weight)
-        .text(function(d) { return d.id; });
-    } else {
-      node.append("title").text(function(d) { return d.id });
-    }
+    // Tooltip: full name on hover
+    node.append("title").text((d: any) =>
+      `${d.id}\nTotal connections: ${degree[d.id] || 0}`
+    )
 
     var tickCount = 0
     simulation.on("tick", () => {
       tickCount++
-      if (tickCount === 1) console.log('[FDG] first tick fired')
-      if (tickCount === 10) console.log('[FDG] 10 ticks in, simulation running')
 
-      // Draw edges as quadratic bezier arcs so they curve around nodes rather
-      // than passing straight through them. Control point is offset perpendicular
-      // to the midpoint by 25% of the edge length (capped at 40px).
       link.attr("d", (d: any) => {
-        const sx = isNaN(d.source.x) ? 0 : d.source.x
-        const sy = isNaN(d.source.y) ? 0 : d.source.y
-        const tx = isNaN(d.target.x) ? 0 : d.target.x
-        const ty = isNaN(d.target.y) ? 0 : d.target.y
+        const sx = d.source.x, sy = d.source.y
+        const tx = d.target.x, ty = d.target.y
         const dx = tx - sx, dy = ty - sy
         const len = Math.sqrt(dx * dx + dy * dy) || 1
-        const arc = Math.min(len * 0.25, 40)
-        // Perpendicular offset from midpoint
+
+        // Clip path to node borders so arrowhead tip lands at the circle edge
+        const srcR = nodeRadius(d.source) + 2
+        const tgtR = nodeRadius(d.target) + 3
+        const startX = sx + (dx / len) * srcR
+        const startY = sy + (dy / len) * srcR
+        const endX = tx - (dx / len) * tgtR
+        const endY = ty - (dy / len) * tgtR
+
+        // Quadratic bezier with perpendicular arc offset.
+        // For A→B the offset is in one direction; for B→A the reversed dx/dy
+        // naturally produces an offset in the opposite direction — so
+        // bidirectional pairs form two distinct visible arcs.
+        const arc = Math.min(len * 0.35, 80)
         const cx = (sx + tx) / 2 - (dy / len) * arc
         const cy = (sy + ty) / 2 + (dx / len) * arc
-        return `M${sx},${sy}Q${cx},${cy} ${tx},${ty}`
-      });
 
-      // No clamping — let nodes go wherever the physics puts them.
-      // The auto-fit on simulation end zooms to show everything.
-      node.attr("transform", function(d) {
-        if (isNaN(d.x)) return "";
-        return "translate(" + d.x + "," + d.y + ")";
-      });
-    });
+        return `M${startX},${startY}Q${cx},${cy} ${endX},${endY}`
+      })
+
+      node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
+    })
 
     simulation.on("end", () => {
-      console.log('[FDG] simulation ended after', tickCount, 'ticks')
-      const pad = 40
+      console.log('[FDG] ended after', tickCount, 'ticks')
+      const pad = 60
       const xs = nodes.map((d: any) => d.x).filter((v: number) => !isNaN(v))
       const ys = nodes.map((d: any) => d.y).filter((v: number) => !isNaN(v))
-      if (!xs.length) { console.log('[FDG] no valid node positions at end'); return }
+      if (!xs.length) return
 
-      const x0 = Math.min(...xs) - pad
-      const x1 = Math.max(...xs) + pad
-      const y0 = Math.min(...ys) - pad
-      const y1 = Math.max(...ys) + pad
-
+      const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad
+      const y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad
       const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.9
       const tx = width / 2 - scale * ((x0 + x1) / 2)
       const ty = height / 2 - scale * ((y0 + y1) / 2)
-      console.log('[FDG] auto-fit: scale=', scale, 'tx=', tx, 'ty=', ty)
 
       svg.transition().duration(750).call(
         (zoom as any).transform,
@@ -362,57 +303,45 @@ const vis: ForceDirectedGraphVisualization = {
       )
     })
 
-    // Fixed legend — appended to svg directly so it stays put during zoom/pan
-    const groups = Array.from(new Set(nodes.map((n: any) => n.group)))
-      .filter((g: any) => g != null && g !== '' && g !== 'null' && g !== 'undefined' && g !== '__unknown__')
-      .sort() as string[]
-
+    // Fixed legend (not affected by zoom/pan)
+    const groups = Object.keys(groupSet).sort()
     if (groups.length > 0) {
-      const legendGroups = groups.slice(0, 30) // cap at 30 entries
+      const legendGroups = groups.slice(0, 30)
       const lPad = 8, lItemH = 18
       const lWidth = 170
       const lHeight = legendGroups.length * lItemH + lPad * 2
 
       const legend = svg.append("g")
-        .attr("class", "legend")
         .attr("transform", `translate(10, 10)`)
-        .style("pointer-events", "none") // don't interfere with zoom/drag
+        .style("pointer-events", "none")
 
-      // Background box
       legend.append("rect")
-        .attr("width", lWidth).attr("height", lHeight)
-        .attr("rx", 5)
+        .attr("width", lWidth).attr("height", lHeight).attr("rx", 5)
         .attr("fill", "white").attr("fill-opacity", 0.88)
         .attr("stroke", "#ccc").attr("stroke-width", 1)
 
       legendGroups.forEach((group, i) => {
         const row = legend.append("g")
           .attr("transform", `translate(${lPad}, ${lPad + i * lItemH})`)
-
         row.append("rect")
-          .attr("width", 10).attr("height", 10).attr("y", 2)
+          .attr("width", 10).attr("height", 10).attr("y", 2).attr("rx", 2)
           .attr("fill", color(group) as string)
-          .attr("rx", 2)
-
         row.append("text")
           .attr("x", 16).attr("y", 11)
-          .style("font-size", "11px")
-          .style("fill", "#333")
+          .style("font-size", "11px").style("fill", "#333")
           .style("font-family", '"Open Sans", "Helvetica", sans-serif')
           .text(group.length > 20 ? group.slice(0, 19) + '…' : group)
       })
 
       if (groups.length > 30) {
-        const row = legend.append("g")
+        legend.append("g")
           .attr("transform", `translate(${lPad}, ${lPad + 30 * lItemH})`)
-        row.append("text")
+          .append("text")
           .attr("x", 0).attr("y", 11)
           .style("font-size", "10px").style("fill", "#999")
           .text(`+ ${groups.length - 30} more`)
       }
     }
-
-    console.log('[FDG] update() setup complete, simulation running in background')
   }
 }
 
