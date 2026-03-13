@@ -93,7 +93,10 @@ const vis: ForceDirectedGraphVisualization = {
       }
       function dragended(d) {
         if (!d3.event.active) simulation.alphaTarget(0)
-        d.fx = null; d.fy = null
+        // Keep node pinned at its new position — releasing fx/fy lets the
+        // simulation pull all nodes back to the pre-stretch equilibrium.
+        d.fx = d.x
+        d.fy = d.y
       }
       return d3.drag()
         .on("start", dragstarted)
@@ -175,14 +178,16 @@ const vis: ForceDirectedGraphVisualization = {
     const edgeT = (d: any) => maxLinkVal === minLinkVal ? 0.5
       : (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
 
-    // Stroke width: moderate range so thick edges don't dominate
-    const edgeStrokeWidth = (d: any) => 1 + edgeT(d) * edgeT(d) * 9  // 1–10 px
+    // Stroke width scaled by simScale so edges stay visually proportional on any screen size.
+    // On a large spread-out graph the nodes are further apart in coordinate space,
+    // so strokes must be proportionally larger to remain visible after zoom-to-fit.
+    const edgeStrokeWidth = (d: any) => (2 + edgeT(d) * edgeT(d) * 10) * Math.max(0.7, simScale)
 
     // Opacity by weight: weak edges fade into background, strong ones pop
-    const edgeOpacity = (d: any) => 0.1 + edgeT(d) * 0.75  // 10–85%
+    const edgeOpacity = (d: any) => 0.12 + edgeT(d) * 0.75  // 12–87%
 
     // Arrow marker size scales with stroke width (tip = path endpoint, no extra pullback needed)
-    const arrowSize = (d: any) => Math.max(8, edgeStrokeWidth(d) * 1.4)  // 8–22 px
+    const arrowSize = (d: any) => Math.max(10, edgeStrokeWidth(d) * 1.5)
 
     // Edge label: show rounded value + unit label if available
     const edgeLabel = (d: any) => {
@@ -419,6 +424,26 @@ const vis: ForceDirectedGraphVisualization = {
           .attr("opacity", 0.4)
       })
 
+    // Hover over any node: brighten + thicken its outgoing edges so they're easy to trace.
+    // When a node is click-selected this is suppressed — applyHighlight() handles that state.
+    node
+      .on("mouseover.edgehighlight", function(d: any) {
+        if (selectedNode !== null) return
+        link
+          .attr("stroke-opacity", (l: any) =>
+            l.sourceId === d.id ? Math.min(edgeOpacity(l) + 0.55, 1) : edgeOpacity(l) * 0.35
+          )
+          .attr("stroke-width", (l: any) =>
+            l.sourceId === d.id ? edgeStrokeWidth(l) * 1.8 : edgeStrokeWidth(l)
+          )
+      })
+      .on("mouseout.edgehighlight", function() {
+        if (selectedNode !== null) return
+        link
+          .attr("stroke-opacity", edgeOpacity)
+          .attr("stroke-width", edgeStrokeWidth)
+      })
+
     svg.on("click", function() {
       if (selectedNode !== null) {
         selectedNode = null
@@ -492,6 +517,11 @@ const vis: ForceDirectedGraphVisualization = {
         nodes.forEach((n: any) => { n.y = midY + (n.y - midY) * stretch })
       }
     }
+
+    // Anchor all nodes at their final positions — this prevents the simulation
+    // from pulling them back to the pre-stretch equilibrium if it restarts
+    // (e.g., during a drag or click interaction).
+    nodes.forEach((n: any) => { n.fx = n.x; n.fy = n.y })
 
     // Draw the final positions — no animation, just place everything correctly
     link.attr("d", edgePath)
