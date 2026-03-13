@@ -191,13 +191,24 @@ const vis: ForceDirectedGraphVisualization = {
       return `${d.sourceId} → ${d.targetId}\n${Math.round(d.value * 10) / 10} ${unit}`
     }
 
+    // Pre-place nodes in a viewport-proportional ellipse so the simulation
+    // starts with a layout that already matches the screen shape.
+    // This dramatically reduces the number of ticks needed to reach a good layout.
+    const rx = width * 0.35, ry = height * 0.35
+    nodes.forEach((n: any, i: number) => {
+      const angle = (i / nodes.length) * 2 * Math.PI
+      const rVar = 0.7 + (i % 5) * 0.06  // vary radius slightly to avoid ring artifacts
+      n.x = width / 2 + Math.cos(angle) * rx * rVar
+      n.y = height / 2 + Math.sin(angle) * ry * rVar
+    })
+
     // Scale spatial parameters to viewport area so the simulation naturally
     // produces a graph sized to the available space.
     // Reference area 580² ≈ 336k px² → simScale = 1 at that size.
     const simScale = Math.sqrt(width * height) / 580
 
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.015)
+      .alphaDecay(0.028)  // slightly faster convergence for synchronous mode
       .force("link", d3.forceLink(links)
         .distance((d: any) => {
           // Heavy collab → close; light collab → far apart. Scale with viewport.
@@ -442,62 +453,65 @@ const vis: ForceDirectedGraphVisualization = {
       return `M${startX},${startY}Q${cx},${cy} ${endX},${endY}`
     }
 
-    var tickCount = 0
+    // Tick handler: only needed for drag interactions — the initial layout
+    // is computed synchronously below so there's no visible animated layout phase.
     simulation.on("tick", () => {
-      tickCount++
       link.attr("d", edgePath)
       linkHit.attr("d", edgePath)
       node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
     })
 
-    simulation.on("end", () => {
-      console.log('[FDG] ended after', tickCount, 'ticks')
+    // Run the simulation synchronously: compute the full layout in one JS call,
+    // invisible to the user, so there's no "compressed → snap" two-step effect.
+    simulation.stop()
+    const nTicks = Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - 0.028))
+    for (let i = 0; i < Math.min(nTicks, 400); i++) simulation.tick()
+    console.log('[FDG] synchronous ticks:', Math.min(nTicks, 400))
 
-      const getXs = () => nodes.map((d: any) => d.x).filter((v: number) => !isNaN(v))
-      const getYs = () => nodes.map((d: any) => d.y).filter((v: number) => !isNaN(v))
-      let xs = getXs(), ys = getYs()
-      if (!xs.length) return
+    // Stretch node positions to match the viewport aspect ratio so the graph
+    // fills the available space on any screen shape.
+    const getCoords = (axis: 'x' | 'y') =>
+      nodes.map((d: any) => d[axis]).filter((v: number) => !isNaN(v))
 
-      const gx0 = Math.min(...xs), gx1 = Math.max(...xs)
-      const gy0 = Math.min(...ys), gy1 = Math.max(...ys)
+    const xs0 = getCoords('x'), ys0 = getCoords('y')
+    if (xs0.length) {
+      const gx0 = Math.min(...xs0), gx1 = Math.max(...xs0)
+      const gy0 = Math.min(...ys0), gy1 = Math.max(...ys0)
       const graphW = gx1 - gx0 || 1
       const graphH = gy1 - gy0 || 1
       const viewAR  = width / Math.max(height, 1)
       const graphAR = graphW / graphH
 
-      // After the isotropic simulation, stretch node positions so the graph
-      // aspect ratio matches the viewport. This fills the available space on
-      // any screen shape without distorting the cluster structure.
       if (viewAR > graphAR * 1.15) {
-        // Viewport is wider than the graph → stretch nodes horizontally
         const stretch = Math.min(viewAR / graphAR * 0.9, 4)
         const midX = (gx0 + gx1) / 2
         nodes.forEach((n: any) => { n.x = midX + (n.x - midX) * stretch })
       } else if (graphAR > viewAR * 1.15) {
-        // Viewport is taller than the graph → stretch nodes vertically
         const stretch = Math.min(graphAR / viewAR * 0.9, 4)
         const midY = (gy0 + gy1) / 2
         nodes.forEach((n: any) => { n.y = midY + (n.y - midY) * stretch })
       }
+    }
 
-      // Redraw with stretched positions, then auto-fit
-      link.attr("d", edgePath)
-      linkHit.attr("d", edgePath)
-      node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
+    // Draw the final positions — no animation, just place everything correctly
+    link.attr("d", edgePath)
+    linkHit.attr("d", edgePath)
+    node.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
 
-      const pad = 70
-      xs = getXs(); ys = getYs()
+    // Zoom-to-fit with a smooth reveal animation
+    const pad = 70
+    const xs = getCoords('x'), ys = getCoords('y')
+    if (xs.length) {
       const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad
       const y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad
-      const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.95
-      const tx = width / 2 - scale * ((x0 + x1) / 2)
-      const ty = height / 2 - scale * ((y0 + y1) / 2)
-
-      svg.transition().duration(750).call(
+      const fitScale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.95
+      const ftx = width / 2 - fitScale * ((x0 + x1) / 2)
+      const fty = height / 2 - fitScale * ((y0 + y1) / 2)
+      svg.transition().duration(600).call(
         (zoom as any).transform,
-        d3.zoomIdentity.translate(tx, ty).scale(scale)
+        d3.zoomIdentity.translate(ftx, fty).scale(fitScale)
       )
-    })
+    }
 
     // Fixed legend (not affected by zoom/pan)
     const groups = Object.keys(groupSet).sort()
