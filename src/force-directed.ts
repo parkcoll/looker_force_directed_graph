@@ -107,52 +107,28 @@ const vis: ForceDirectedGraphVisualization = {
     const colorScale = d3.scaleOrdinal()
     const color = colorScale.range(config.color_range || d3.schemeCategory10)
 
-    // Determine which dimension indices to use for source/target group and edge weight
-    // based on how many dimensions are in the query.
-    //   2 dims → [0]=srcGroup, [1]=tgtGroup
-    //   3 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID  (no tgt group: use srcGroup lookup)
-    //   4 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID, [3]=tgtGroup
-    //   5 dims → [0]=srcID, [1]=srcGroup, [2]=tgtID, [3]=tgtGroup, [4]=edgeWeight
+    // Dimension layouts supported:
+    //   2 dims → srcGroup=dim0, tgtGroup=dim1,  weight=measure
+    //   3 dims → srcGroup=dim0, tgtGroup=dim1,  weight=dim2   ← "source, target, weight"
+    //   4 dims → srcGroup=dim1, tgtGroup=dim3,  weight=measure (person-level: srcID,srcGrp,tgtID,tgtGrp)
+    //   5 dims → srcGroup=dim1, tgtGroup=dim3,  weight=dim4   (person-level + weight dim)
     const ndim = dimensions.length
-    const srcGroupIdx  = ndim === 2 ? 0 : 1
-    const tgtGroupIdx  = ndim >= 4 ? 3 : (ndim === 2 ? 1 : -1)  // -1 = use sourceGroup lookup
-    const edgeWeightDim = ndim >= 5 ? dimensions[4] : null
+    const srcGroupIdx   = ndim <= 3 ? 0 : 1
+    const tgtGroupIdx   = ndim <= 3 ? 1 : 3
+    const edgeWeightDim = ndim === 3 ? dimensions[2] : (ndim >= 5 ? dimensions[4] : null)
 
-    console.log('[FDG] dim layout: ndim=' + ndim + ' srcGroupIdx=' + srcGroupIdx + ' tgtGroupIdx=' + tgtGroupIdx)
+    console.log('[FDG] ndim=' + ndim + ' srcGrp=dim' + srcGroupIdx + ' tgtGrp=dim' + tgtGroupIdx + ' wt=' + (edgeWeightDim ? edgeWeightDim.name : (measure ? 'measure' : 'none')))
 
-    // First pass: build a sourceID→group lookup so target nodes can be resolved
-    // even when there is no explicit target group dimension (3-dim layout).
-    const idToGroup: {[key: string]: string} = {}
-    if (tgtGroupIdx === -1) {
-      data.forEach((row: Row) => {
-        const id = row[dimensions[0].name] && row[dimensions[0].name].value
-        const grp = row[dimensions[1].name] && row[dimensions[1].name].value
-        if (id != null && grp != null) idToGroup[String(id)] = String(grp)
-      })
-    }
-
-    // Aggregate rows into group-to-group edges, summing the measure value.
+    // Aggregate rows into group-to-group edges, summing the weight value.
     const linkMap: {[key: string]: number} = {}
     const groupSet: {[key: string]: boolean} = {}
 
     data.forEach((row: Row) => {
       const srcGrpVal = row[dimensions[srcGroupIdx].name] && row[dimensions[srcGroupIdx].name].value
-      if (srcGrpVal == null) return
+      const tgtGrpVal = row[dimensions[tgtGroupIdx].name] && row[dimensions[tgtGroupIdx].name].value
+      if (srcGrpVal == null || tgtGrpVal == null) return
       const srcGrp = String(srcGrpVal)
-
-      let tgtGrp: string
-      if (tgtGroupIdx >= 0) {
-        const tgtGrpVal = row[dimensions[tgtGroupIdx].name] && row[dimensions[tgtGroupIdx].name].value
-        if (tgtGrpVal == null) return
-        tgtGrp = String(tgtGrpVal)
-      } else {
-        // 3-dim: look up target group from the id→group map
-        const tgtIdVal = row[dimensions[2].name] && row[dimensions[2].name].value
-        if (tgtIdVal == null) return
-        tgtGrp = idToGroup[String(tgtIdVal)] || null
-        if (!tgtGrp) return
-      }
-
+      const tgtGrp = String(tgtGrpVal)
       if (srcGrp === tgtGrp) return  // skip self-loops
 
       groupSet[srcGrp] = true
