@@ -171,18 +171,18 @@ const vis: ForceDirectedGraphVisualization = {
     const maxDegree = Math.max(1, ...Object.keys(degree).map(k => degree[k]))
     const nodeRadius = (d: any) => radius + Math.sqrt((degree[d.id] || 0) / maxDegree) * radius * 1.5
 
-    // Stroke width: quadratic curve gives more visual separation at the high end
-    const edgeStrokeWidth = (d: any) => {
-      if (maxLinkVal === minLinkVal) return 3
-      const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-      return 1.5 + t * t * 13  // 1.5–14.5 px, heavy quadratic bias toward high values
-    }
+    // Normalized 0→1 weight position for each edge
+    const edgeT = (d: any) => maxLinkVal === minLinkVal ? 0.5
+      : (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
 
-    // Arrow marker size scales with stroke width so it stays visible on thick edges
-    const arrowSize = (d: any) => {
-      const sw = edgeStrokeWidth(d)
-      return Math.max(10, sw * 1.8)  // minimum 10px, grows with stroke
-    }
+    // Stroke width: moderate range so thick edges don't dominate
+    const edgeStrokeWidth = (d: any) => 1 + edgeT(d) * edgeT(d) * 9  // 1–10 px
+
+    // Opacity by weight: weak edges fade into background, strong ones pop
+    const edgeOpacity = (d: any) => 0.1 + edgeT(d) * 0.75  // 10–85%
+
+    // Arrow marker size scales with stroke width (tip = path endpoint, no extra pullback needed)
+    const arrowSize = (d: any) => Math.max(8, edgeStrokeWidth(d) * 1.4)  // 8–22 px
 
     // Edge label: show rounded value + unit label if available
     const edgeLabel = (d: any) => {
@@ -258,7 +258,7 @@ const vis: ForceDirectedGraphVisualization = {
       .enter().append("path")
       .attr("class", "fdg-edge")
       .attr("stroke", (d: any) => color(d.sourceId) as string)
-      .attr("stroke-opacity", 0.7)
+      .attr("stroke-opacity", edgeOpacity)
       .attr("stroke-width", edgeStrokeWidth)
       .attr("marker-end", (d: any) =>
         `url(#fdg-arrow-${d.sourceId.replace(/[^a-zA-Z0-9]/g, '_')}-${d.targetId.replace(/[^a-zA-Z0-9]/g, '_')})`
@@ -315,7 +315,7 @@ const vis: ForceDirectedGraphVisualization = {
         node.selectAll("text")
           .style("fill", "#333")
           .attr("opacity", 1)
-        link.attr("stroke-opacity", 0.7)
+        link.attr("stroke-opacity", edgeOpacity)
             .attr("opacity", 1)
         linkHit.attr("opacity", 1)
       } else {
@@ -427,9 +427,9 @@ const vis: ForceDirectedGraphVisualization = {
       const len = Math.sqrt(dx * dx + dy * dy) || 1
 
       // Clip path to node borders so arrowhead tip lands at the circle edge.
-      // Pull endpoint back by ~half the marker size so arrow doesn't overlap the circle.
+      // refX=10 puts the arrow TIP exactly at the path endpoint, so no extra offset needed.
       const srcR = nodeRadius(d.source) + 2
-      const tgtR = nodeRadius(d.target) + arrowSize(d) * 0.55
+      const tgtR = nodeRadius(d.target) + 2
       const startX = sx + (dx / len) * srcR
       const startY = sy + (dy / len) * srcR
       const endX = tx - (dx / len) * tgtR
