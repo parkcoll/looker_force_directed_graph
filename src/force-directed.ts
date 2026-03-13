@@ -191,30 +191,32 @@ const vis: ForceDirectedGraphVisualization = {
       return `${d.sourceId} → ${d.targetId}\n${Math.round(d.value * 10) / 10} ${unit}`
     }
 
-    // Force simulation — tuned to break circular symmetry:
-    //  - variable link distance + strength so heavy-collab pairs cluster tightly
-    //  - stronger charge to spread thin-connection nodes to the periphery
-    //  - weaker centering so the layout can stretch asymmetrically
+    // Scale all spatial simulation parameters to viewport area so the graph
+    // fills the available space on any screen size.
+    // Reference area ~580² (≈336k px²) → simScale = 1 at that size.
+    const simScale = Math.sqrt(width * height) / 580
+
+    // Aspect ratio drives the ratio of horizontal vs vertical centering strength.
+    // On wide screens the X force is stronger, stretching the layout to fill width.
+    const ar = width / Math.max(height, 1)
+    const xStrength = 0.022 * Math.sqrt(ar)       // stronger X on wide viewports
+    const yStrength = 0.022 / Math.sqrt(ar)        // weaker Y so height isn't wasted
+
     const simulation = d3.forceSimulation(nodes)
-      .alphaDecay(0.015)  // slower decay → more time to find an asymmetric optimum
+      .alphaDecay(0.015)
       .force("link", d3.forceLink(links)
         .distance((d: any) => {
-          if (maxLinkVal === minLinkVal) return linkDistance
-          const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-          // Heavy collab → very close; light collab → far apart
-          return linkDistance * 0.4 + (1 - t) * linkDistance * 2.6
+          // Heavy collab → close; light collab → far apart. Scale with viewport.
+          return (linkDistance * 0.4 + (1 - edgeT(d)) * linkDistance * 2.6) * simScale
         })
-        .strength((d: any) => {
-          if (maxLinkVal === minLinkVal) return 0.4
-          const t = (d.value - minLinkVal) / (maxLinkVal - minLinkVal)
-          return 0.05 + t * 0.7  // heavier edges pull much harder → clusters form
-        })
+        .strength((d: any) => 0.05 + edgeT(d) * 0.7)
         .id(d => (d as any).id))
-      .force("charge", d3.forceManyBody().strength(-3500))
-      .force("x", d3.forceX(width / 2).strength(0.02))   // weaker centering
-      .force("y", d3.forceY(height / 2).strength(0.02 * (width / height)))
-      // Collision radius includes space for the label below the circle
-      .force("collision", (d3 as any).forceCollide().radius((d: any) => nodeRadius(d) + 55).iterations(4))
+      .force("charge", d3.forceManyBody().strength(-3000 * simScale))
+      .force("x", d3.forceX(width / 2).strength(xStrength))
+      .force("y", d3.forceY(height / 2).strength(yStrength))
+      .force("collision", (d3 as any).forceCollide()
+        .radius((d: any) => (nodeRadius(d) + 50) * Math.max(0.8, simScale))
+        .iterations(4))
 
     const svg = this.svg!
       .attr("width", '100%')
@@ -463,7 +465,7 @@ const vis: ForceDirectedGraphVisualization = {
 
       const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad
       const y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad
-      const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.9
+      const scale = Math.min(width / (x1 - x0), height / (y1 - y0)) * 0.95
       const tx = width / 2 - scale * ((x0 + x1) / 2)
       const ty = height / 2 - scale * ((y0 + y1) / 2)
 
