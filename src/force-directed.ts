@@ -186,8 +186,8 @@ const vis: ForceDirectedGraphVisualization = {
     // Opacity by weight: weak edges fade into background, strong ones pop
     const edgeOpacity = (d: any) => 0.12 + edgeT(d) * 0.75  // 12–87%
 
-    // Arrow marker size scales with stroke width (tip = path endpoint, no extra pullback needed)
-    const arrowSize = (d: any) => Math.max(10, edgeStrokeWidth(d) * 1.5)
+    // Arrow marker — square-root scaling keeps size reasonable for thick edges
+    const arrowSize = (d: any) => Math.max(8, Math.sqrt(edgeStrokeWidth(d)) * 4.5)
 
     // Edge label: show rounded value + unit label if available
     const edgeLabel = (d: any) => {
@@ -465,10 +465,13 @@ const vis: ForceDirectedGraphVisualization = {
       const dx = tx - sx, dy = ty - sy
       const len = Math.sqrt(dx * dx + dy * dy) || 1
 
-      // Clip path to node borders so arrowhead tip lands at the circle edge.
-      // refX=10 puts the arrow TIP exactly at the path endpoint, so no extra offset needed.
+      // Place the endpoint slightly INSIDE the target circle.
+      // The node group is rendered on top of the link group (z-order), so the circle
+      // acts as a natural clip mask: it covers the arrowhead body, and only the tip
+      // sticks out past the circle edge — clean arrowhead at any stroke thickness.
       const srcR = nodeRadius(d.source) + 2
-      const tgtR = nodeRadius(d.target) + 2
+      const aSize = arrowSize(d)
+      const tgtR = Math.max(nodeRadius(d.target) * 0.25, nodeRadius(d.target) - aSize * 0.4)
       const startX = sx + (dx / len) * srcR
       const startY = sy + (dy / len) * srcR
       const endX = tx - (dx / len) * tgtR
