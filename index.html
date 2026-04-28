@@ -1418,7 +1418,23 @@ function applyFilters(raw) {
 
 // ── GROUP-LEVEL GRAPH ────────────────────────────────────
 let groupViewActive = false, individualGD = null, individualRaw = null;
-let expandedGroups = new Set(); // groups expanded within group view
+let expandedGroups = new Set();
+let _savedGroupForces = null; // stash user forces while group view is active
+
+function _applyGroupViewForces() {
+  _savedGroupForces = { linkDist: S.linkDist, repulsion: S.repulsion, gravity: S.gravity };
+  S.linkDist  = S.linkDist  * 2.8;
+  S.repulsion = S.repulsion * 3.5;
+  S.gravity   = S.gravity   * 0.4;
+}
+function _restoreGroupViewForces() {
+  if (_savedGroupForces) {
+    S.linkDist  = _savedGroupForces.linkDist;
+    S.repulsion = _savedGroupForces.repulsion;
+    S.gravity   = _savedGroupForces.gravity;
+    _savedGroupForces = null;
+  }
+}
 
 function buildMixedGraph(data, expanded) {
   const memberCount = {};
@@ -2924,10 +2940,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       const gd = buildMixedGraph(rawData, new Set());
       computeMetrics(gd.nodes, gd.links);
       applyGroupSizeProxy(gd.nodes);
+      _applyGroupViewForces();
       renderGraph(gd);
     } else {
       btn.className = 'btn btn-ghost';
       btn.textContent = '⬡ Group View';
+      _restoreGroupViewForces();
       if (individualRaw) {
         rawData = individualRaw;
         const filtered = applyFilters(individualRaw);
