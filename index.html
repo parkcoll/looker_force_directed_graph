@@ -99,6 +99,20 @@ select:focus{border-color:#4c7fff44}
 .ap-list::-webkit-scrollbar-track{background:#0f1117}
 .ap-list::-webkit-scrollbar-thumb{background:#2d3148;border-radius:2px}
 .ap-row{display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:5px;cursor:pointer;transition:background .1s;border:1px solid transparent}
+/* silo view */
+.silo-row{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:5px}
+.silo-stack{height:6px;border-radius:3px;overflow:hidden;background:#2d3148}
+.silo-stack-fill{height:100%;border-radius:3px}
+.silo-pct{font-size:10px;font-weight:700;font-family:monospace;width:30px;text-align:right;flex-shrink:0}
+.silo-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8b90a8;padding:8px 7px 3px}
+.matrix-wrap{overflow:auto;padding:4px 7px 8px;-webkit-overflow-scrolling:touch}
+.matrix-table{border-collapse:collapse;font-size:9px}
+.matrix-table td,.matrix-table th{width:28px;min-width:28px;height:22px;text-align:center;border:1px solid transparent}
+.matrix-table th{font-size:8px;font-weight:600;color:#8b90a8;white-space:nowrap;position:sticky;top:0;z-index:1}
+.matrix-table .row-lbl{text-align:right;padding-right:5px;font-size:8px;font-weight:600;color:#8b90a8;white-space:nowrap;width:auto;min-width:50px}
+.matrix-table td{font-family:monospace;font-size:8px;cursor:default}
+body.theme-light .silo-stack{background:#dde3ef}
+body.theme-light .matrix-table th, body.theme-light .matrix-table .row-lbl{color:#6b7280}
 .ap-row:hover{background:#2d314840}
 .ap-row.hi{background:#4c7fff22;border-color:#4c7fff33}
 .ap-rank{font-size:10px;color:#4a5078;width:18px;text-align:right;flex-shrink:0;font-weight:700}
@@ -545,6 +559,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
           <div class="sp-radio-group" id="sp-edgecol">
             <label class="sp-radio"><input type="radio" name="edgecol" value="group" checked> Source group</label>
             <label class="sp-radio"><input type="radio" name="edgecol" value="node"> Source node colour <span style="font-size:10px;color:#8b90a8">— shows clusters of influence</span></label>
+            <label class="sp-radio"><input type="radio" name="edgecol" value="crossteam"> <span style="color:#10b981">Green</span> = cross-team, grey = within team</label>
             <label class="sp-radio"><input type="radio" name="edgecol" value="neutral"> Neutral grey</label>
           </div>
         </div>
@@ -586,6 +601,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
         </div>
       </div>
       <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
+      <button class="btn btn-ghost" id="crossteam-btn" title="Show only cross-team connections">⟷ Cross-team</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
       <button class="btn btn-warn" id="simulate-btn" title="Simulate removing this person">⚡ If they left…</button>
@@ -609,6 +625,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
           <div class="tab" data-m="betweenness">Connectors</div>
           <div class="tab" data-m="total">Networkers</div>
           <div class="tab" data-m="closeness">Reach</div>
+          <div class="tab" data-m="silos" style="border-color:#ef444444;color:#ef4444">Silos</div>
         </div>
         <div class="ap-desc" id="ap-desc"></div>
       </div>
@@ -1381,9 +1398,15 @@ function rerenderMixed() {
 }
 
 // ── instant-apply visual functions ───────────────────────
-let edgeColMode = 'group'; // 'group' | 'node' | 'neutral'
+let edgeColMode = 'group'; // 'group' | 'node' | 'neutral' | 'crossteam'
+let crossTeamOnly = false;
 
 function getEdgeColor(d) {
+  if (edgeColMode === 'crossteam') {
+    const sg = (d.source && d.source.group) || d.srcGrp || '';
+    const tg = (d.target && d.target.group) || '';
+    return sg === tg ? '#9ca3af' : '#10b981';
+  }
   if (edgeColMode === 'neutral') return '#4a5078';
   if (edgeColMode === 'node') return getNodeColor(typeof d.source==='object' ? d.source : {group: d.srcGrp||d.source});
   return colorScale(d.srcGrp || (d.source && d.source.group) || '');
@@ -1429,7 +1452,11 @@ function applyEdgeOpacity() {
   const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
   const edgeT=w=>(w-wMin)/(wMax-wMin||1);
   d3.selectAll('#graph-svg .links path')
-    .attr('stroke-opacity', d => S.edgeOpacity * (0.2 + edgeT(d.weight)*0.65));
+    .attr('stroke-opacity', d => {
+      const sg=d.source.group||'', tg=d.target.group||'';
+      if (crossTeamOnly && sg===tg) return 0;
+      return S.edgeOpacity * (0.2 + edgeT(d.weight)*0.65);
+    });
 }
 
 function applyLabels() {
@@ -1558,6 +1585,7 @@ function drawCanvasFrame() {
   // Edges
   GD.links.forEach(l => {
     if (l.source.x==null||l.target.x==null) return;
+    if (crossTeamOnly && l.source.group===l.target.group) return;
     const sx=l.source.x,sy=l.source.y,tx=l.target.x,ty=l.target.y;
     const dx=tx-sx,dy=ty-sy,len=Math.sqrt(dx*dx+dy*dy)||1;
     const rs=nodeR(l.source),rt=nodeR(l.target)+9;
@@ -2120,9 +2148,100 @@ function openPanel(){
 }
 function closePanel(){ document.getElementById('ap').classList.remove('open'); }
 
+// ── SILO ANALYSIS ────────────────────────────────────────
+function computeSiloScores() {
+  const groups = [...new Set(GD.nodes.map(d => d.group))];
+  return groups.map(g => {
+    const ids = new Set(GD.nodes.filter(d => d.group === g).map(d => d.id));
+    let internal = 0, external = 0;
+    GD.links.forEach(l => {
+      const si = ids.has(l.source.id||l.source), ti = ids.has(l.target.id||l.target);
+      if (si && ti) internal += l.weight;
+      else if (si || ti) external += l.weight;
+    });
+    const total = internal + external || 1;
+    return { group: g, internal, external, total, score: Math.round(internal / total * 100) };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function buildConnectionMatrix() {
+  const groups = [...new Set(GD.nodes.map(d => d.group))].sort();
+  const idx = Object.fromEntries(groups.map((g, i) => [g, i]));
+  const n = groups.length;
+  const mat = Array.from({length: n}, () => new Array(n).fill(0));
+  GD.links.forEach(l => {
+    const sg = l.source.group||'', tg = l.target.group||'';
+    if (idx[sg]!==undefined && idx[tg]!==undefined) mat[idx[sg]][idx[tg]] += l.weight;
+  });
+  return { groups, mat };
+}
+
+function renderSiloView() {
+  const list = document.getElementById('ap-list');
+  list.innerHTML = '';
+
+  // — Silo scores —
+  const lbl1 = document.createElement('div');
+  lbl1.className = 'silo-label';
+  lbl1.textContent = 'Insularity by group (% internal connections)';
+  list.appendChild(lbl1);
+
+  computeSiloScores().forEach(s => {
+    const col = colorScale(s.group);
+    const intPct = Math.round(s.internal / s.total * 100);
+    const scoreCol = s.score >= 70 ? '#ef4444' : s.score >= 40 ? '#f59e0b' : '#10b981';
+    const row = document.createElement('div');
+    row.className = 'silo-row';
+    row.innerHTML =
+      `<div class="ap-dot" style="background:${col};flex-shrink:0"></div>`+
+      `<div class="ap-name" style="min-width:72px;max-width:90px">${s.group}</div>`+
+      `<div class="silo-stack" style="flex:1"><div class="silo-stack-fill" style="width:${intPct}%;background:${col}"></div></div>`+
+      `<div class="silo-pct" style="color:${scoreCol}">${s.score}%</div>`;
+    list.appendChild(row);
+  });
+
+  // — Connection matrix —
+  const { groups, mat } = buildConnectionMatrix();
+  if (groups.length < 2) return;
+  const maxVal = Math.max(...mat.flat(), 1);
+
+  const lbl2 = document.createElement('div');
+  lbl2.className = 'silo-label';
+  lbl2.style.marginTop = '12px';
+  lbl2.textContent = 'Group-to-group connections';
+  list.appendChild(lbl2);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'matrix-wrap';
+
+  let html = '<table class="matrix-table"><thead><tr><th class="row-lbl"></th>';
+  groups.forEach(g => { html += `<th title="${g}">${g.slice(0,5)}</th>`; });
+  html += '</tr></thead><tbody>';
+  groups.forEach((g, i) => {
+    html += `<tr><th class="row-lbl">${g.slice(0,10)}</th>`;
+    mat[i].forEach((v, j) => {
+      const t = v / maxVal;
+      const isInternal = i === j;
+      const bg = v === 0 ? 'transparent'
+        : isInternal ? `rgba(239,68,68,${Math.max(t*0.75,0.1)})`
+        : `rgba(76,127,255,${Math.max(t*0.8,0.1)})`;
+      const tc = t > 0.45 ? '#fff' : 'inherit';
+      html += `<td style="background:${bg};color:${tc}" title="${g} → ${groups[j]}: ${v}">${v||''}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  list.appendChild(wrap);
+}
+
 function renderPanel(){
-  // metric desc
-  document.getElementById('ap-desc').textContent=METRIC[curMetric].desc;
+  const isSilos = curMetric === 'silos';
+  document.getElementById('ap-desc').textContent = isSilos
+    ? 'How insular each team is — and where cross-team collaboration is weak.'
+    : METRIC[curMetric]?.desc||'';
+  document.getElementById('ap-filter').style.display = isSilos ? 'none' : '';
+  if (isSilos) { renderSiloView(); renderSummary(); return; }
   // group filter options
   const groups=['all',...new Set(GD.nodes.map(d=>d.group))];
   const sel=document.getElementById('group-filter');
@@ -2591,6 +2710,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.querySelector('#sp-sizeby input[value="total"]').checked=true;
     document.querySelector('#sp-edgecol input[value="group"]').checked=true;
     S.sizeBy='total'; edgeColMode='group';
+    crossTeamOnly=false;
+    document.getElementById('crossteam-btn').className='btn btn-ghost';
+    document.getElementById('crossteam-btn').textContent='⟷ Cross-team';
     document.querySelectorAll('#sp-groups input').forEach(el=>el.checked=true);
     if(rawData) { document.getElementById('sl-maxn').value=document.getElementById('sl-maxn').max;
       document.getElementById('sv-maxn').textContent='All'; }
@@ -2613,6 +2735,16 @@ document.addEventListener('DOMContentLoaded',()=>{
       else if (t === 'metrics') exportMetricsCSV();
       else if (t === 'edges') exportEdgesCSV();
     });
+  });
+
+  // Cross-team edges toggle
+  document.getElementById('crossteam-btn').addEventListener('click', () => {
+    crossTeamOnly = !crossTeamOnly;
+    const btn = document.getElementById('crossteam-btn');
+    btn.className = crossTeamOnly ? 'btn btn-on' : 'btn btn-ghost';
+    btn.textContent = crossTeamOnly ? '⟷ All Edges' : '⟷ Cross-team';
+    applyEdgeOpacity();
+    if (!useCanvas) applyEdgeColour();
   });
 
   // Canvas renderer toggle
