@@ -1467,7 +1467,7 @@ const THEMES = {
   neon:      { colors: ['#00d4ff','#ff2d78','#39ff14','#ff9500','#d400ff','#ff6600','#00ffaa','#ffff00','#ff00ff','#00ff88','#ff4488','#44ffbb','#ffcc00','#00ccff'] }
 };
 
-let curTheme = 'dark';
+let curTheme = 'light';
 
 function applyTheme(name) {
   curTheme = name;
@@ -2337,6 +2337,8 @@ function buildGroupCheckboxes(data) {
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  applyTheme('light');
+
   // tab switching
   document.getElementById('tabs').addEventListener('click',e=>{
     const t=e.target.closest('.tab'); if(!t) return;
