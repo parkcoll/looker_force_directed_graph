@@ -1404,19 +1404,22 @@ function applyFilters(raw) {
   });
   let nodes = raw.nodes.filter(d => !S.excludeGroups.has(d.group));
   // limit by max nodes — drop least connected first
+  // Note: after D3 simulation runs, l.source/l.target become node objects; always resolve to id
+  const lid = l => l.source?.id ?? l.source;
+  const tid = l => l.target?.id ?? l.target;
   if (nodes.length > S.maxNodes) {
     const deg = {};
     links.forEach(l => {
-      const s=l.source, t=l.target;
+      const s=lid(l), t=tid(l);
       deg[s]=(deg[s]||0)+1; deg[t]=(deg[t]||0)+1;
     });
     nodes = [...nodes].sort((a,b)=>(deg[b.id]||0)-(deg[a.id]||0)).slice(0, S.maxNodes);
     const keep = new Set(nodes.map(d=>d.id));
-    links = links.filter(l=>keep.has(l.source)&&keep.has(l.target));
+    links = links.filter(l=>keep.has(lid(l))&&keep.has(tid(l)));
   }
   // rebuild bidirectional flags
-  const lset = new Set(links.map(l=>l.source+'|'+l.target));
-  links.forEach(l=>{ l.bi = lset.has(l.target+'|'+l.source); });
+  const lset = new Set(links.map(l=>lid(l)+'|'+tid(l)));
+  links.forEach(l=>{ l.bi = lset.has(tid(l)+'|'+lid(l)); });
   return { nodes, links };
 }
 
