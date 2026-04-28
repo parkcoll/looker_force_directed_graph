@@ -49,7 +49,7 @@ textarea::placeholder{color:#3d4168}
 .llabel{font-size:11px;color:#c8cad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolbar{position:absolute;bottom:12px;left:8px;right:8px;display:flex;gap:6px;z-index:20;flex-wrap:wrap;justify-content:flex-end;display:none}
 .toolbar .btn{flex-shrink:0}
-@media(max-width:600px){.toolbar{gap:5px;justify-content:center} .toolbar .btn{font-size:11px;padding:5px 8px}}
+@media(max-width:600px){.toolbar{gap:5px;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;left:4px;right:4px} .toolbar::-webkit-scrollbar{display:none} .toolbar .btn{font-size:11px;padding:5px 9px}}
 /* export dropdown */
 .export-dd{position:relative;display:inline-block}
 .export-dd-menu{display:none;position:absolute;bottom:calc(100% + 4px);right:0;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:200;min-width:210px;padding:4px;box-shadow:0 6px 18px #00000055}
@@ -2648,8 +2648,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 
   // Window resize — keep canvas sized
+  let resizeTimer;
   window.addEventListener('resize', () => {
-    if (useCanvas && GD) { resizeCanvas(); drawCanvasFrame(); }
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!GD) return;
+      if (useCanvas) {
+        const c = document.getElementById('graph-canvas');
+        const oldW = c.width, oldH = c.height;
+        resizeCanvas();
+        // shift the transform so the same graph centre stays centred
+        const dx = (c.width - oldW) / 2, dy = (c.height - oldH) / 2;
+        canvasT = d3.zoomIdentity.translate(canvasT.x + dx, canvasT.y + dy).scale(canvasT.k);
+        drawCanvasFrame();
+      }
+    }, 60);
   });
 });
 
