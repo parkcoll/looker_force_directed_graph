@@ -52,9 +52,11 @@ textarea::placeholder{color:#3d4168}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .ldot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .llabel{font-size:11px;color:#c8cad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toolbar{position:absolute;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:8px;right:8px;display:flex;gap:6px;z-index:20;flex-wrap:wrap;justify-content:flex-end;display:none}
-.toolbar .btn{flex-shrink:0}
-@media(max-width:600px){.toolbar{gap:5px;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;left:4px;right:4px} .toolbar::-webkit-scrollbar{display:none} .toolbar .btn{font-size:11px;padding:5px 9px}}
+.toolbar{position:absolute;top:10px;right:10px;bottom:10px;left:auto;display:none;flex-direction:column;align-items:stretch;gap:5px;z-index:20;width:150px;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.toolbar::-webkit-scrollbar{display:none}
+.toolbar .btn{flex-shrink:0;width:100%;box-sizing:border-box;text-align:left}
+.toolbar .export-dd{width:100%;display:block}
+@media(max-width:600px){.toolbar{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;width:auto;top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:4px;right:4px;gap:5px;-webkit-overflow-scrolling:touch;align-items:center} .toolbar::-webkit-scrollbar{display:none} .toolbar .btn{flex-shrink:0;width:auto;text-align:center;font-size:11px;padding:5px 9px} .toolbar .export-dd{width:auto}}
 /* export dropdown */
 .export-dd{position:relative;display:inline-block}
 .export-dd-menu{display:none;position:fixed;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:9999;min-width:210px;padding:4px;box-shadow:0 6px 18px #00000055}
@@ -3049,10 +3051,16 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   function positionMenu(btn, menu) {
     const r = btn.getBoundingClientRect();
-    menu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
     const rightEdge = window.innerWidth - r.right;
     menu.style.right = Math.max(4, rightEdge) + 'px';
     menu.style.left = 'auto';
+    if (r.top > window.innerHeight / 2) {
+      menu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+      menu.style.top = 'auto';
+    } else {
+      menu.style.top = (r.bottom + 4) + 'px';
+      menu.style.bottom = 'auto';
+    }
   }
 
   // Export dropdown
