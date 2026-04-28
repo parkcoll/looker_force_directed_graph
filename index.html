@@ -1451,6 +1451,21 @@ function linkPath(d){
   return `M${x1},${y1}Q${mx},${my},${x2},${y2}`;
 }
 
+function placeTip(e, html) {
+  const tip = document.getElementById('tip');
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let lx = e.clientX + 14, ty = e.clientY - 28;
+  if (lx + tw > vw - 8) lx = e.clientX - tw - 14;
+  if (ty + th > vh - 8) ty = e.clientY - th - 8;
+  if (lx < 8) lx = 8;
+  if (ty < 8) ty = 8;
+  tip.style.left = lx + 'px';
+  tip.style.top  = ty + 'px';
+}
+
 function renderGraph(data, keepPos){
   GD=data; selNode=null; communities=null; showComm=false;
   const wrap=document.getElementById('graph-wrap');
@@ -1503,8 +1518,7 @@ function renderGraph(data, keepPos){
   const tip=document.getElementById('tip');
   link.on('mousemove',(e,d)=>{
     const sn=d.source.id||d.source, tn=d.target.id||d.target;
-    tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-28)+'px';
-    tip.innerHTML=`<div class="tip-title">${sn} → ${tn}</div><div class="tip-row">Weight: <span>${d.weight}</span></div>`;
+    placeTip(e,`<div class="tip-title">${sn} → ${tn}</div><div class="tip-row">Weight: <span>${d.weight}</span></div>`);
   }).on('mouseleave',()=>tip.style.display='none');
 
   const drag=d3.drag()
@@ -1525,13 +1539,12 @@ function renderGraph(data, keepPos){
 
   node.on('mousemove',(e,d)=>{
     if(selNode) return;
-    tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-28)+'px';
     const extra = d.isGroup
       ? `<div class="tip-row">Members: <span>${d.memberCount}</span></div><div class="tip-row" style="color:#8b90a8;font-size:10px">Double-click to expand</div>`
       : `<div class="tip-row">Connections: <span>${d.total}</span></div>`;
-    tip.innerHTML=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div>${extra}`;
+    placeTip(e,`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div>${extra}`);
   }).on('mouseleave',()=>{if(!selNode)tip.style.display='none';})
-  .on('click',(e,d)=>{e.stopPropagation();selectNode(d,node,link);})
+  .on('click',(e,d)=>{e.stopPropagation();selectNode(d,node,link,e);})
   .on('dblclick',(e,d)=>{
     if (!groupViewActive) return;
     e.stopPropagation();
@@ -1567,11 +1580,11 @@ function renderGraph(data, keepPos){
   document.getElementById('input-section').style.display='none';
 }
 
-function selectNode(d, nodeSel, linkSel){
+function selectNode(d, nodeSel, linkSel, e){
   selNode = d.id;
-  const tip=document.getElementById('tip');
-  tip.style.display='block';
-  tip.innerHTML=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">In-degree: <span>${d.indegree}</span></div><div class="tip-row">Out-degree: <span>${d.outdegree}</span></div><div class="tip-row">Total: <span>${d.total}</span></div>`;
+  const html=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">In-degree: <span>${d.indegree}</span></div><div class="tip-row">Out-degree: <span>${d.outdegree}</span></div><div class="tip-row">Total: <span>${d.total}</span></div>`;
+  if (e) placeTip(e, html);
+  else { const tip=document.getElementById('tip'); tip.innerHTML=html; tip.style.display='block'; }
   nodeSel.select('circle')
     .attr('fill',n=>n.id===d.id?colorScale(n.group):'#3a3d50')
     .attr('fill-opacity',n=>n.id===d.id?1:0.35);
