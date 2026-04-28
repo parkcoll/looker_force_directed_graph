@@ -1745,7 +1745,7 @@ function initCanvasEvents() {
     if (!drag&&!selNode){
       const [gx,gy]=screenToGraph(e.clientX,e.clientY), hit=hitNode(gx,gy);
       if (hit){const extra=hit.isGroup?`<div class="tip-row">Members: <span>${hit.memberCount}</span></div>`:`<div class="tip-row">Connections: <span>${hit.total}</span></div>`;
-        placeTip(e,`<div class="tip-title">${hit.id}</div><div class="tip-row">Group: <span>${hit.group}</span></div>${extra}`);}
+        placeTip(e,`<div class="tip-title">${hit.id}</div><div class="tip-row">Group: <span>${hit.group}</span></div>${extra}`,hit);}
       else document.getElementById('tip').style.display='none';
     }
   });
@@ -1765,7 +1765,7 @@ function selectNodeCanvas(d, e) {
     +`<div class="tip-row">In-degree: <span>${d.indegree}</span></div>`
     +`<div class="tip-row">Out-degree: <span>${d.outdegree}</span></div>`
     +`<div class="tip-row">Total: <span>${d.total}</span></div>`;
-  if (e) placeTip(e, html); else {const tip=document.getElementById('tip');tip.innerHTML=html;tip.style.display='block';}
+  if (e) placeTip(e, html, d); else {const tip=document.getElementById('tip');tip.innerHTML=html;tip.style.display='block';}
   document.querySelectorAll('.ap-row').forEach(r=>r.classList.toggle('hi',r.dataset.id===d.id));
   updateSimulateBtn(); drawCanvasFrame();
 }
@@ -2096,15 +2096,28 @@ function exportEdgesCSV() {
   downloadText(rows.map(r=>r.join(',')).join('\n'), 'network-connections.csv', 'text/csv');
 }
 
-function placeTip(e, html) {
+function placeTip(e, html, nodeData) {
   const tip = document.getElementById('tip');
   tip.innerHTML = html;
   tip.style.display = 'block';
   const tw = tip.offsetWidth, th = tip.offsetHeight;
   const vw = window.innerWidth, vh = window.innerHeight;
-  let lx = e.clientX + 14, ty = e.clientY - 28;
-  if (lx + tw > vw - 8) lx = e.clientX - tw - 14;
-  if (ty + th > vh - 8) ty = e.clientY - th - 8;
+  let cx = e.clientX, cy = e.clientY;
+  // iOS touch-generated click events often have clientX/Y = 0; fall back to node position
+  if (!cx && !cy && nodeData && nodeData.x != null) {
+    if (useCanvas) {
+      cx = canvasT.applyX(nodeData.x);
+      cy = canvasT.applyY(nodeData.y);
+    } else {
+      const t = d3.zoomTransform(document.getElementById('graph-svg'));
+      const rect = document.getElementById('graph-wrap').getBoundingClientRect();
+      cx = rect.left + t.applyX(nodeData.x);
+      cy = rect.top  + t.applyY(nodeData.y);
+    }
+  }
+  let lx = (cx || vw / 2) + 14, ty = (cy || vh / 2) - 28;
+  if (lx + tw > vw - 8) lx = cx - tw - 14;
+  if (ty + th > vh - 8) ty = cy - th - 8;
   if (lx < 8) lx = 8;
   if (ty < 8) ty = 8;
   tip.style.left = lx + 'px';
@@ -2194,7 +2207,7 @@ function renderGraph(data, keepPos){
     const extra = d.isGroup
       ? `<div class="tip-row">Members: <span>${d.memberCount}</span></div><div class="tip-row" style="color:#8b90a8;font-size:10px">Double-click to expand</div>`
       : `<div class="tip-row">Connections: <span>${d.total}</span></div>`;
-    placeTip(e,`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div>${extra}`);
+    placeTip(e,`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div>${extra}`,d);
   }).on('mouseleave',()=>{if(!selNode)tip.style.display='none';})
   .on('click',(e,d)=>{e.stopPropagation();selectNode(d,node,link,e);})
   .on('dblclick',(e,d)=>{
@@ -2241,7 +2254,7 @@ function selectNode(d, nodeSel, linkSel, e){
   selNode = d.id;
   updateSimulateBtn();
   const html=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">In-degree: <span>${d.indegree}</span></div><div class="tip-row">Out-degree: <span>${d.outdegree}</span></div><div class="tip-row">Total: <span>${d.total}</span></div>`;
-  if (e) placeTip(e, html);
+  if (e) placeTip(e, html, d);
   else { const tip=document.getElementById('tip'); tip.innerHTML=html; tip.style.display='block'; }
   if (useCanvas) { drawCanvasFrame(); }
   else if (nodeSel && linkSel) {
