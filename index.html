@@ -3065,26 +3065,24 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 
   // Window resize — keep canvas sized
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if (!GD) return;
-      if (useCanvas) {
-        const c = document.getElementById('graph-canvas');
-        // measure old CSS size before resizeCanvas overwrites style
-        const oldW = parseFloat(c.style.width) || c.clientWidth;
-        const oldH = parseFloat(c.style.height) || c.clientHeight;
-        resizeCanvas();
-        const newW = parseFloat(c.style.width);
-        const newH = parseFloat(c.style.height);
-        // shift transform in CSS pixels so the same graph centre stays centred
-        const dx = (newW - oldW) / 2, dy = (newH - oldH) / 2;
-        canvasT = d3.zoomIdentity.translate(canvasT.x + dx, canvasT.y + dy).scale(canvasT.k);
-        drawCanvasFrame();
-      }
+  // ResizeObserver fires for any container size change (window resize, panel open/close transitions)
+  let roTimer;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(roTimer);
+    roTimer = setTimeout(() => {
+      if (!GD || !useCanvas) return;
+      const c = document.getElementById('graph-canvas');
+      const oldW = parseFloat(c.style.width) || c.clientWidth;
+      const oldH = parseFloat(c.style.height) || c.clientHeight;
+      resizeCanvas();
+      const newW = parseFloat(c.style.width);
+      const newH = parseFloat(c.style.height);
+      const dx = (newW - oldW) / 2, dy = (newH - oldH) / 2;
+      canvasT = d3.zoomIdentity.translate(canvasT.x + dx, canvasT.y + dy).scale(canvasT.k);
+      drawCanvasFrame();
     }, 60);
   });
+  ro.observe(document.getElementById('graph-wrap'));
 });
 
 </script>
