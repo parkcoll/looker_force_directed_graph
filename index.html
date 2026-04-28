@@ -565,8 +565,8 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
             <input type="range" id="sl-ew" min="0" max="30" step="1" value="10">
           </div>
           <div class="sp-row">
-            <div class="sp-toggle" style="display:none">
-              <span>Canvas renderer <span style="font-size:9px;color:#8b90a8">faster for 500+ nodes</span></span>
+            <div class="sp-toggle">
+              <span>Canvas renderer <span style="font-size:9px;color:#8b90a8">auto-enabled for 500+ nodes</span></span>
               <label class="toggle-sw"><input type="checkbox" id="tgl-canvas"><div class="toggle-track"></div></label>
             </div>
           </div>
@@ -2744,6 +2744,14 @@ function loadGraph(raw){
     buildGroupCheckboxes(data);
     renderGraph(applyFilters(data));
     document.getElementById('loader').style.display='none';
+    // auto-switch renderer based on size
+    const shouldCanvas = data.nodes.length > 500;
+    if (shouldCanvas !== useCanvas) {
+      document.getElementById('tgl-canvas').checked = shouldCanvas;
+      toggleRenderer();
+    } else {
+      document.getElementById('tgl-canvas').checked = useCanvas;
+    }
     const banner = document.getElementById('large-net-banner');
     if (data.nodes.length > 250) {
       banner.style.display = 'block';
