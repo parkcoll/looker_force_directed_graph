@@ -50,6 +50,21 @@ textarea::placeholder{color:#3d4168}
 .toolbar{position:absolute;bottom:12px;left:8px;right:8px;display:flex;gap:6px;z-index:20;flex-wrap:wrap;justify-content:flex-end;display:none}
 .toolbar .btn{flex-shrink:0}
 @media(max-width:600px){.toolbar{gap:5px;justify-content:center} .toolbar .btn{font-size:11px;padding:5px 8px}}
+/* export dropdown */
+.export-dd{position:relative;display:inline-block}
+.export-dd-menu{display:none;position:absolute;bottom:calc(100% + 4px);right:0;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:200;min-width:210px;padding:4px;box-shadow:0 6px 18px #00000055}
+.export-dd-menu.open{display:block}
+.export-opt{padding:7px 11px;font-size:12px;color:#c8cad8;cursor:pointer;border-radius:5px;transition:background .1s;display:flex;align-items:center;gap:8px}
+.export-opt:hover{background:#2d3148;color:#fff}
+.export-opt small{display:block;font-size:10px;color:#8b90a8;margin-top:1px}
+.export-opt-icon{font-size:14px;flex-shrink:0}
+body.theme-light .export-dd-menu{background:#fff;border-color:#dde3ef;box-shadow:0 6px 18px #0000001a}
+body.theme-light .export-opt{color:#374151}
+body.theme-light .export-opt:hover{background:#eef1f7}
+body.theme-corporate .export-dd-menu{background:#0f2040;border-color:#1a3660}
+body.theme-neon .export-dd-menu{background:#080c14;border-color:#0d2030;box-shadow:0 6px 24px #00d4ff11}
+body.theme-neon .export-opt{color:#c8f0ff}
+body.theme-neon .export-opt:hover{background:#0d2030}
 /* sample dropdown */
 .sample-dd{position:relative;display:inline-block}
 .sample-dd-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:200;min-width:190px;padding:4px;box-shadow:0 6px 18px #00000055}
@@ -560,6 +575,15 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
     <div class="toolbar" id="toolbar">
       <button class="btn btn-ghost" id="fit-btn" title="Fit view (F)">⊕ Fit</button>
       <button class="btn btn-ghost" id="search-btn" title="Search (/)">🔍 Search</button>
+      <div class="export-dd">
+        <button class="btn btn-ghost" id="export-menu-btn" title="Export">↓ Export</button>
+        <div class="export-dd-menu" id="export-dd-menu">
+          <div class="export-opt" data-export="png"><span class="export-opt-icon">🖼</span><div><div>Image (PNG)</div><small>Current graph view</small></div></div>
+          <div class="export-opt" data-export="svg"><span class="export-opt-icon">✦</span><div><div>Vector (SVG)</div><small>SVG mode only — scalable</small></div></div>
+          <div class="export-opt" data-export="metrics"><span class="export-opt-icon">📊</span><div><div>Metrics (CSV)</div><small>Node scores &amp; centrality</small></div></div>
+          <div class="export-opt" data-export="edges"><span class="export-opt-icon">🔗</span><div><div>Connections (CSV)</div><small>Raw edge list with weights</small></div></div>
+        </div>
+      </div>
       <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
@@ -1780,6 +1804,78 @@ ${newBots.length?`<div class="hc-section"><div class="hc-section-title">New Pres
   document.getElementById('close-removal').addEventListener('click',()=>ov.remove());
 }
 
+// ── EXPORT ───────────────────────────────────────────────
+function downloadText(text, filename, mime) {
+  const blob = new Blob([text], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.download = filename; a.href = url; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportPNG() {
+  if (useCanvas) {
+    const c = document.getElementById('graph-canvas');
+    const a = document.createElement('a');
+    a.download = 'network.png'; a.href = c.toDataURL('image/png'); a.click();
+    return;
+  }
+  const svgEl = document.getElementById('graph-svg');
+  const W = svgEl.clientWidth, H = svgEl.clientHeight;
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(svgEl);
+  const blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    c.width = W * dpr; c.height = H * dpr;
+    const ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = CANVAS_BG[curTheme] || '#0a0d14';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+    const a = document.createElement('a');
+    a.download = 'network.png'; a.href = c.toDataURL('image/png'); a.click();
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('PNG export failed. Try switching to Canvas Renderer (Settings → Visual) then export again.'); };
+  img.src = url;
+}
+
+function exportSVG() {
+  if (useCanvas) { alert('SVG export is only available in SVG mode. Disable Canvas Renderer in Settings → Visual first.'); return; }
+  const svgEl = document.getElementById('graph-svg');
+  const serializer = new XMLSerializer();
+  const svgStr = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(svgEl);
+  downloadText(svgStr, 'network.svg', 'image/svg+xml');
+}
+
+function exportMetricsCSV() {
+  if (!GD) return;
+  const rows = [['Name','Group','In-degree','Out-degree','Total connections','Betweenness','Closeness']];
+  GD.nodes.forEach(d => rows.push([
+    `"${(d.id||'').replace(/"/g,'""')}"`,
+    `"${(d.group||'').replace(/"/g,'""')}"`,
+    d.indegree||0, d.outdegree||0, d.total||0,
+    (d.betweenness||0).toFixed(4),
+    (d.closeness||0).toFixed(4)
+  ]));
+  downloadText(rows.map(r=>r.join(',')).join('\n'), 'network-metrics.csv', 'text/csv');
+}
+
+function exportEdgesCSV() {
+  if (!GD) return;
+  const rows = [['From','To','Weight']];
+  GD.links.forEach(l => rows.push([
+    `"${((l.source.id||l.source)||'').replace(/"/g,'""')}"`,
+    `"${((l.target.id||l.target)||'').replace(/"/g,'""')}"`,
+    l.weight
+  ]));
+  downloadText(rows.map(r=>r.join(',')).join('\n'), 'network-connections.csv', 'text/csv');
+}
+
 function placeTip(e, html) {
   const tip = document.getElementById('tip');
   tip.innerHTML = html;
@@ -2491,6 +2587,23 @@ document.addEventListener('DOMContentLoaded',()=>{
       document.getElementById('sv-maxn').textContent='All'; }
     Object.assign(S, DEFAULTS, {excludeGroups:new Set()});
     if(GD){ applyColour(); applyEdgeOpacity(); applyLabels(); applyArrows(); }
+  });
+
+  // Export dropdown
+  const exportBtn = document.getElementById('export-menu-btn');
+  const exportMenu = document.getElementById('export-dd-menu');
+  exportBtn.addEventListener('click', e => { e.stopPropagation(); exportMenu.classList.toggle('open'); });
+  document.addEventListener('click', () => exportMenu.classList.remove('open'));
+  document.querySelectorAll('.export-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      exportMenu.classList.remove('open');
+      if (!GD) { alert('Load a graph first.'); return; }
+      const t = opt.dataset.export;
+      if (t === 'png') exportPNG();
+      else if (t === 'svg') exportSVG();
+      else if (t === 'metrics') exportMetricsCSV();
+      else if (t === 'edges') exportEdgesCSV();
+    });
   });
 
   // Canvas renderer toggle
