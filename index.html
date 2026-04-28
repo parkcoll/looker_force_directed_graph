@@ -1722,8 +1722,9 @@ function drawCanvasFrame() {
     ctx.fillStyle = getNodeColor(d); ctx.fill();
     ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
     if (searchMatchIds && searchMatchIds.has(d.id)) {
-      ctx.globalAlpha=0.85; ctx.beginPath(); ctx.arc(d.x,d.y,r+5,0,Math.PI*2);
-      ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
+      ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(d.x,d.y,r+7,0,Math.PI*2);
+      ctx.strokeStyle='#ef4444'; ctx.lineWidth=2.5;
+      ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
     }
     if (S.showLabels) {
       ctx.globalAlpha = (selDim||schDim) ? 0.12 : 1;
@@ -1828,6 +1829,7 @@ function doSearch(q) {
 function applySearchHighlight() {
   if (useCanvas){drawCanvasFrame();return;}
   if (!GD) return;
+  d3.selectAll('#graph-svg .nodes .highlight-ring').remove();
   if (!searchMatchIds){
     d3.selectAll('#graph-svg .nodes circle').attr('fill-opacity',1);
     d3.selectAll('#graph-svg .nodes text').attr('fill-opacity',null);
@@ -1835,6 +1837,16 @@ function applySearchHighlight() {
   }
   d3.selectAll('#graph-svg .nodes circle').attr('fill-opacity',d=>searchMatchIds.has(d.id)?1:0.1);
   d3.selectAll('#graph-svg .nodes text').attr('fill-opacity',d=>searchMatchIds.has(d.id)?1:0.08);
+  d3.selectAll('#graph-svg .nodes g')
+    .filter(d=>searchMatchIds.has(d.id))
+    .append('circle')
+    .attr('class','highlight-ring')
+    .attr('r',d=>nodeR(d)+7)
+    .attr('fill','none')
+    .attr('stroke','#ef4444')
+    .attr('stroke-width',2.5)
+    .attr('stroke-dasharray','5,3')
+    .attr('pointer-events','none');
   d3.selectAll('#graph-svg .links path').attr('stroke-opacity',l=>{
     const s=l.source.id||l.source,t=l.target.id||l.target;
     return (searchMatchIds.has(s)||searchMatchIds.has(t))?S.edgeOpacity*0.7:0.03;
@@ -2033,6 +2045,7 @@ function showSeedFinder() {
       const seeds = findOptimalSeeders(nSeeds);
       searchMatchIds = new Set(seeds.map(s=>s.node.id));
       applySearchHighlight();
+      ov.style.display = 'none'; // close modal, keep highlights on graph
     });
     document.getElementById('seed-clear-btn').addEventListener('click', ()=>{
       searchMatchIds=null; applySearchHighlight();
