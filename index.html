@@ -114,6 +114,38 @@ select:focus{border-color:#4c7fff44}
 .hc-people{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .hc-tag{font-size:10px;background:#2d3148;border-radius:4px;padding:2px 7px;color:#c8cad8}
 .hc-divider{border:none;border-top:1px solid #2d3148;margin:14px 0}
+/* settings panel */
+.sp{width:0;background:#1a1d27;border-right:1px solid #2d3148;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s ease;order:-1}
+.sp.open{width:280px}
+.sp-inner{width:280px;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.sp-head{padding:12px 14px;border-bottom:1px solid #2d3148;flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.sp-title{font-size:13px;font-weight:600;color:#fff}
+.sp-body{flex:1;overflow-y:auto;padding:10px 14px}
+.sp-body::-webkit-scrollbar{width:4px}
+.sp-body::-webkit-scrollbar-thumb{background:#2d3148;border-radius:2px}
+.sp-section{margin-bottom:16px}
+.sp-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8b90a8;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2d3148}
+.sp-row{margin-bottom:10px}
+.sp-label{font-size:11px;color:#c8cad8;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.sp-val{font-size:11px;color:#4c7fff;font-weight:600;font-family:monospace}
+input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
+.sp-groups{display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto}
+.sp-chk{display:flex;align-items:center;gap:6px;font-size:11px;color:#c8cad8;cursor:pointer;padding:2px 0}
+.sp-chk input{accent-color:#4c7fff;cursor:pointer;width:13px;height:13px}
+.sp-radio-group{display:flex;flex-direction:column;gap:4px}
+.sp-radio{display:flex;align-items:center;gap:6px;font-size:11px;color:#c8cad8;cursor:pointer;padding:2px 0}
+.sp-radio input{accent-color:#4c7fff;cursor:pointer}
+.sp-toggle{display:flex;align-items:center;justify-content:space-between}
+.sp-toggle span{font-size:11px;color:#c8cad8}
+.toggle-sw{position:relative;width:32px;height:18px;flex-shrink:0}
+.toggle-sw input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:#2d3148;border-radius:9px;transition:.2s;cursor:pointer}
+.toggle-sw input:checked+.toggle-track{background:#4c7fff}
+.toggle-track:before{content:'';position:absolute;width:12px;height:12px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle-sw input:checked+.toggle-track:before{left:17px}
+.sp-footer{padding:12px 14px;border-top:1px solid #2d3148;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.sp-reset{font-size:11px;color:#8b90a8;text-align:center;cursor:pointer;text-decoration:underline;background:none;border:none;cursor:pointer}
+.sp-reset:hover{color:#c8cad8}
 </style>
 </head>
 <body>
@@ -154,6 +186,94 @@ select:focus{border-color:#4c7fff44}
 </div>
 
 <div class="main" id="main">
+  <!-- Settings panel (left) -->
+  <div class="sp" id="sp">
+    <div class="sp-inner">
+      <div class="sp-head">
+        <div class="sp-title">Advanced Settings</div>
+        <button class="btn btn-ghost" id="close-sp" style="padding:3px 8px;font-size:11px">✕</button>
+      </div>
+      <div class="sp-body">
+
+        <div class="sp-section">
+          <div class="sp-section-title">Data Filters</div>
+          <div class="sp-row">
+            <div class="sp-label">Min edge weight <span class="sp-val" id="sv-minw">1</span></div>
+            <input type="range" id="sl-minw" min="1" max="10" step="1" value="1">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label">Max nodes to show <span class="sp-val" id="sv-maxn">All</span></div>
+            <input type="range" id="sl-maxn" min="5" max="200" step="5" value="200">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label" style="margin-bottom:6px">Exclude groups</div>
+            <div class="sp-groups" id="sp-groups"></div>
+          </div>
+        </div>
+
+        <div class="sp-section">
+          <div class="sp-section-title">Graph Physics</div>
+          <div class="sp-row">
+            <div class="sp-label">Link distance <span class="sp-val" id="sv-ld">120</span></div>
+            <input type="range" id="sl-ld" min="30" max="300" step="10" value="120">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label">Node repulsion <span class="sp-val" id="sv-rep">600</span></div>
+            <input type="range" id="sl-rep" min="100" max="2000" step="50" value="600">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label">Gravity <span class="sp-val" id="sv-grav">0.04</span></div>
+            <input type="range" id="sl-grav" min="1" max="20" step="1" value="4">
+          </div>
+        </div>
+
+        <div class="sp-section">
+          <div class="sp-section-title">Visual (instant)</div>
+          <div class="sp-row">
+            <div class="sp-label">Node size scale <span class="sp-val" id="sv-ns">1.0×</span></div>
+            <input type="range" id="sl-ns" min="4" max="20" step="1" value="10">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label">Edge opacity <span class="sp-val" id="sv-eo">100%</span></div>
+            <input type="range" id="sl-eo" min="10" max="100" step="5" value="100">
+          </div>
+          <div class="sp-row">
+            <div class="sp-label">Edge curve <span class="sp-val" id="sv-ec">25%</span></div>
+            <input type="range" id="sl-ec" min="0" max="100" step="5" value="25">
+          </div>
+          <div class="sp-row">
+            <div class="sp-toggle">
+              <span>Show labels</span>
+              <label class="toggle-sw"><input type="checkbox" id="tgl-labels" checked><div class="toggle-track"></div></label>
+            </div>
+          </div>
+          <div class="sp-row">
+            <div class="sp-toggle">
+              <span>Show arrows</span>
+              <label class="toggle-sw"><input type="checkbox" id="tgl-arrows" checked><div class="toggle-track"></div></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="sp-section">
+          <div class="sp-section-title">Colour nodes by (instant)</div>
+          <div class="sp-radio-group" id="sp-colourby">
+            <label class="sp-radio"><input type="radio" name="colourby" value="group" checked> Team / Group</label>
+            <label class="sp-radio"><input type="radio" name="colourby" value="indegree"> In-demand score</label>
+            <label class="sp-radio"><input type="radio" name="colourby" value="betweenness"> Connector score</label>
+            <label class="sp-radio"><input type="radio" name="colourby" value="total"> Total connections</label>
+            <label class="sp-radio"><input type="radio" name="colourby" value="community"> Detected community</label>
+          </div>
+        </div>
+
+      </div>
+      <div class="sp-footer">
+        <button class="btn btn-primary" id="apply-settings-btn">↺ Apply &amp; Refresh Graph</button>
+        <button class="sp-reset" id="reset-settings-btn">Reset to defaults</button>
+      </div>
+    </div>
+  </div>
+
   <div class="graph-wrap" id="graph-wrap">
     <svg id="graph-svg"></svg>
     <div class="empty-state" id="empty-state">
@@ -163,6 +283,7 @@ select:focus{border-color:#4c7fff44}
     <div class="legend" id="legend"></div>
     <div class="toolbar" id="toolbar">
       <button class="btn btn-ghost" id="fit-btn">⊕ Fit</button>
+      <button class="btn btn-ghost" id="settings-btn">⚙ Settings</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
       <button class="btn btn-warn" id="health-btn">❤ Network Health</button>
       <button class="btn btn-success" id="analyze-btn">▶ Analyse Graph</button>
@@ -759,10 +880,100 @@ function labelPropagation(nodes, links) {
   return nodes.map((_,i)=>remap.get(labels[i]));
 }
 
+// ── SETTINGS ─────────────────────────────────────────────
+let rawData = null; // full unfiltered dataset
+
+const DEFAULTS = { minWeight:1, maxNodes:200, excludeGroups:new Set(),
+  linkDist:120, repulsion:600, gravity:0.04,
+  nodeScale:1.0, edgeOpacity:1.0, edgeCurve:0.25,
+  showLabels:true, showArrows:true, colourBy:'group' };
+const S = { ...DEFAULTS, excludeGroups: new Set() };
+
+function applyFilters(raw) {
+  const excludeArr=[...S.excludeGroups];
+  let links = raw.links.filter(l => {
+    const sw = l.weight >= S.minWeight;
+    if (!sw) return false;
+    if (excludeArr.length === 0) return true;
+    const sg = l.srcGrp || (typeof l.source==='object'?l.source.group:l.source);
+    const tg = l.dstGrp || (typeof l.target==='object'?l.target.group:l.target);
+    return !S.excludeGroups.has(sg) && !S.excludeGroups.has(tg);
+  });
+  let nodes = raw.nodes.filter(d => !S.excludeGroups.has(d.group));
+  // limit by max nodes — drop least connected first
+  if (nodes.length > S.maxNodes) {
+    const deg = {};
+    links.forEach(l => {
+      const s=l.source, t=l.target;
+      deg[s]=(deg[s]||0)+1; deg[t]=(deg[t]||0)+1;
+    });
+    nodes = [...nodes].sort((a,b)=>(deg[b.id]||0)-(deg[a.id]||0)).slice(0, S.maxNodes);
+    const keep = new Set(nodes.map(d=>d.id));
+    links = links.filter(l=>keep.has(l.source)&&keep.has(l.target));
+  }
+  // rebuild bidirectional flags
+  const lset = new Set(links.map(l=>l.source+'|'+l.target));
+  links.forEach(l=>{ l.bi = lset.has(l.target+'|'+l.source); });
+  return { nodes, links };
+}
+
+// ── instant-apply visual functions ───────────────────────
+function getNodeColor(d) {
+  if (S.colourBy === 'group') return colorScale(d.group);
+  if (S.colourBy === 'community') {
+    if (!communities) communities = labelPropagation(GD.nodes, GD.links);
+    const i = GD.nodes.indexOf(d);
+    return COMM_COLORS[(i>=0?communities[i]:0) % COMM_COLORS.length];
+  }
+  // metric heat: white → blue
+  const vals = GD.nodes.map(n=>n[S.colourBy]||0);
+  const mx = Math.max(...vals)||1;
+  const t = (d[S.colourBy]||0)/mx;
+  return d3.interpolateBlues(0.2 + t*0.78);
+}
+
+function applyColour() {
+  d3.selectAll('#graph-svg .nodes circle').attr('fill', d => getNodeColor(d));
+  renderLegend();
+}
+
+function applyEdgeOpacity() {
+  if (!GD) return;
+  const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
+  const edgeT=w=>(w-wMin)/(wMax-wMin||1);
+  d3.selectAll('#graph-svg .links path')
+    .attr('stroke-opacity', d => S.edgeOpacity * (0.2 + edgeT(d.weight)*0.65));
+}
+
+function applyLabels() {
+  d3.selectAll('#graph-svg .nodes text').attr('display', S.showLabels ? null : 'none');
+}
+
+function applyArrows() {
+  d3.selectAll('#graph-svg .links path')
+    .attr('marker-end', d => S.showArrows
+      ? `url(#arr${COLORS.indexOf(colorScale(d.source.group||''))%COLORS.length})`
+      : null);
+}
+
+function applyEdgeCurve() {
+  if (!GD) return;
+  d3.selectAll('#graph-svg .links path').attr('d', d => {
+    const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
+    const dx=tx-sx,dy=ty-sy,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const rs=nodeR(d.source), rt=nodeR(d.target)+11;
+    const x1=sx+dx/len*rs, y1=sy+dy/len*rs;
+    const x2=tx-dx/len*rt, y2=ty-dy/len*rt;
+    if(!d.bi||S.edgeCurve===0) return `M${x1},${y1}L${x2},${y2}`;
+    const off=Math.min(len*S.edgeCurve,80);
+    return `M${x1},${y1}Q${(x1+x2)/2-dy/len*off},${(y1+y2)/2+dx/len*off},${x2},${y2}`;
+  });
+}
+
 // ── GRAPH RENDER ─────────────────────────────────────────
 const COMM_COLORS=['#4c7fff','#ff6b35','#43d39e','#f7c948','#d94fff','#ff4c88','#4cd9ff','#ffaa4c','#c8ff4c','#ff4c4c'];
 
-function nodeR(d){ return 10 + Math.sqrt((d.total||0)/Math.max(...GD.nodes.map(n=>n.total||1)))*14; }
+function nodeR(d){ return S.nodeScale*8 + Math.sqrt((d.total||0)/Math.max(...GD.nodes.map(n=>n.total||1)))*S.nodeScale*16; }
 
 function linkPath(d){
   const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
@@ -770,8 +981,8 @@ function linkPath(d){
   const rs=nodeR(d.source), rt=nodeR(d.target)+11;
   const x1=sx+dx/len*rs, y1=sy+dy/len*rs;
   const x2=tx-dx/len*rt, y2=ty-dy/len*rt;
-  if(!d.bi) return `M${x1},${y1}L${x2},${y2}`;
-  const off=Math.min(len*0.25,55);
+  if(!d.bi||S.edgeCurve===0) return `M${x1},${y1}L${x2},${y2}`;
+  const off=Math.min(len*S.edgeCurve,80);
   const mx=(x1+x2)/2-dy/len*off, my=(y1+y2)/2+dx/len*off;
   return `M${x1},${y1}Q${mx},${my},${x2},${y2}`;
 }
@@ -831,11 +1042,12 @@ function renderGraph(data){
     .on('end',(e,d)=>{if(!e.active)SIM.alphaTarget(0);d.fx=e.x;d.fy=e.y;});
 
   const node=nodeG.selectAll('g').data(data.nodes).join('g').call(drag).style('cursor','pointer');
-  node.append('circle').attr('r',d=>nodeR(d)).attr('fill',d=>colorScale(d.group)).attr('stroke','#fff').attr('stroke-width',2);
+  node.append('circle').attr('r',d=>nodeR(d)).attr('fill',d=>getNodeColor(d)).attr('stroke','#fff').attr('stroke-width',2);
   node.append('text').text(d=>d.id.length>20?d.id.slice(0,19)+'…':d.id)
     .attr('text-anchor','middle').attr('dy',d=>nodeR(d)+13)
     .attr('font-size','11px').attr('font-weight','bold').attr('fill','#e8eaf0')
-    .attr('paint-order','stroke').attr('stroke','#0a0d14').attr('stroke-width',3);
+    .attr('paint-order','stroke').attr('stroke','#0a0d14').attr('stroke-width',3)
+    .attr('display', S.showLabels ? null : 'none');
 
   node.on('mousemove',(e,d)=>{
     if(selNode) return;
@@ -847,11 +1059,11 @@ function renderGraph(data){
   svg.on('click',()=>clearSelection(node,link));
 
   SIM=d3.forceSimulation(data.nodes)
-    .force('link',d3.forceLink(data.links).id(d=>d.id).distance(d=>60+100/(edgeT(d.weight)+0.1)).strength(0.7))
-    .force('charge',d3.forceManyBody().strength(-600))
-    .force('x',d3.forceX(W/2).strength(0.04))
-    .force('y',d3.forceY(H/2).strength(0.04))
-    .force('collide',d3.forceCollide().radius(d=>nodeR(d)+18))
+    .force('link',d3.forceLink(data.links).id(d=>d.id).distance(d=>S.linkDist*(0.5+0.8/(edgeT(d.weight)+0.1))).strength(0.7))
+    .force('charge',d3.forceManyBody().strength(-S.repulsion))
+    .force('x',d3.forceX(W/2).strength(S.gravity))
+    .force('y',d3.forceY(H/2).strength(S.gravity))
+    .force('collide',d3.forceCollide().radius(d=>nodeR(d)+14))
     .on('tick',()=>{
       link.attr('d',linkPath);
       node.attr('transform',d=>`translate(${d.x},${d.y})`);
@@ -1151,14 +1363,34 @@ function loadGraph(raw){
   try { data=parseCSV(raw); }
   catch(e){ alert('Parse error: '+e.message); return; }
   document.getElementById('loader').style.display='flex';
-  // small delay to let loader paint, then compute betweenness (can be slow)
   setTimeout(()=>{
     computeMetrics(data.nodes, data.links);
-    renderGraph(data);
+    rawData = data;
+    // update slider maxes based on actual data
+    const maxW = Math.max(...data.links.map(l=>l.weight));
+    const sl = document.getElementById('sl-minw');
+    sl.max = Math.ceil(maxW); sl.value = 1;
+    document.getElementById('sv-minw').textContent = '1';
+    document.getElementById('sl-maxn').max = data.nodes.length;
+    document.getElementById('sl-maxn').value = data.nodes.length;
+    document.getElementById('sv-maxn').textContent = 'All';
+    S.minWeight = 1; S.maxNodes = data.nodes.length; S.excludeGroups = new Set();
+    buildGroupCheckboxes(data);
+    renderGraph(applyFilters(data));
     document.getElementById('loader').style.display='none';
-    // fit view after sim settles
     setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')),800);
   },30);
+}
+
+function buildGroupCheckboxes(data) {
+  const groups = [...new Set(data.nodes.map(d=>d.group))].sort();
+  const cont = document.getElementById('sp-groups');
+  cont.innerHTML = '';
+  groups.forEach(g => {
+    const id = 'chk-'+g.replace(/\s+/g,'_');
+    cont.insertAdjacentHTML('beforeend',
+      `<label class="sp-chk"><input type="checkbox" id="${id}" data-group="${g}" checked> ${g}</label>`);
+  });
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
@@ -1252,8 +1484,100 @@ document.addEventListener('DOMContentLoaded',()=>{
     else { openPanel(); }
   });
 
-  // close panel
+  // close analysis panel
   document.getElementById('close-ap').addEventListener('click',closePanel);
+
+  // ── SETTINGS PANEL ──────────────────────────────────────
+  const spEl = document.getElementById('sp');
+  document.getElementById('settings-btn').addEventListener('click',()=>{
+    spEl.classList.toggle('open');
+    document.getElementById('settings-btn').className =
+      spEl.classList.contains('open') ? 'btn btn-on' : 'btn btn-ghost';
+  });
+  document.getElementById('close-sp').addEventListener('click',()=>{
+    spEl.classList.remove('open');
+    document.getElementById('settings-btn').className='btn btn-ghost';
+  });
+
+  // slider display helpers
+  function sliderLive(id, displayId, fmt) {
+    const sl = document.getElementById(id);
+    sl.addEventListener('input', () => {
+      document.getElementById(displayId).textContent = fmt(sl.value);
+    });
+  }
+  sliderLive('sl-minw','sv-minw', v => +v);
+  sliderLive('sl-maxn','sv-maxn', v => +v >= +document.getElementById('sl-maxn').max ? 'All' : v);
+  sliderLive('sl-ld',  'sv-ld',   v => +v);
+  sliderLive('sl-rep', 'sv-rep',  v => +v);
+  sliderLive('sl-grav','sv-grav', v => (+v/100).toFixed(2));
+  sliderLive('sl-ns',  'sv-ns',   v => (+v/10).toFixed(1)+'×');
+  sliderLive('sl-eo',  'sv-eo',   v => v+'%');
+  sliderLive('sl-ec',  'sv-ec',   v => v+'%');
+
+  // instant visual: edge opacity
+  document.getElementById('sl-eo').addEventListener('input', e => {
+    S.edgeOpacity = +e.target.value/100; applyEdgeOpacity();
+  });
+  // instant: edge curve
+  document.getElementById('sl-ec').addEventListener('input', e => {
+    S.edgeCurve = +e.target.value/100; applyEdgeCurve();
+  });
+  // instant: labels toggle
+  document.getElementById('tgl-labels').addEventListener('change', e => {
+    S.showLabels = e.target.checked; applyLabels();
+  });
+  // instant: arrows toggle
+  document.getElementById('tgl-arrows').addEventListener('change', e => {
+    S.showArrows = e.target.checked; applyArrows();
+  });
+  // instant: colour by
+  document.getElementById('sp-colourby').addEventListener('change', e => {
+    if (e.target.name==='colourby') { S.colourBy=e.target.value; if(GD) applyColour(); }
+  });
+
+  // Apply & Refresh — re-filter + re-run simulation
+  document.getElementById('apply-settings-btn').addEventListener('click',()=>{
+    if (!rawData) return;
+    S.minWeight   = +document.getElementById('sl-minw').value;
+    const maxN    = +document.getElementById('sl-maxn').value;
+    S.maxNodes    = maxN >= +document.getElementById('sl-maxn').max ? Infinity : maxN;
+    S.excludeGroups = new Set(
+      [...document.querySelectorAll('#sp-groups input:not(:checked)')].map(el=>el.dataset.group)
+    );
+    S.linkDist    = +document.getElementById('sl-ld').value;
+    S.repulsion   = +document.getElementById('sl-rep').value;
+    S.gravity     = +document.getElementById('sl-grav').value / 100;
+    S.nodeScale   = +document.getElementById('sl-ns').value / 10;
+    document.getElementById('loader').style.display='flex';
+    setTimeout(()=>{
+      const filtered = applyFilters(rawData);
+      computeMetrics(filtered.nodes, filtered.links);
+      renderGraph(filtered);
+      applyEdgeOpacity(); applyLabels(); applyArrows();
+      document.getElementById('loader').style.display='none';
+      setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')),800);
+    },30);
+  });
+
+  // Reset settings
+  document.getElementById('reset-settings-btn').addEventListener('click',()=>{
+    document.getElementById('sl-minw').value=1; document.getElementById('sv-minw').textContent='1';
+    document.getElementById('sl-ld').value=120; document.getElementById('sv-ld').textContent='120';
+    document.getElementById('sl-rep').value=600; document.getElementById('sv-rep').textContent='600';
+    document.getElementById('sl-grav').value=4; document.getElementById('sv-grav').textContent='0.04';
+    document.getElementById('sl-ns').value=10; document.getElementById('sv-ns').textContent='1.0×';
+    document.getElementById('sl-eo').value=100; document.getElementById('sv-eo').textContent='100%';
+    document.getElementById('sl-ec').value=25; document.getElementById('sv-ec').textContent='25%';
+    document.getElementById('tgl-labels').checked=true;
+    document.getElementById('tgl-arrows').checked=true;
+    document.querySelector('#sp-colourby input[value="group"]').checked=true;
+    document.querySelectorAll('#sp-groups input').forEach(el=>el.checked=true);
+    if(rawData) { document.getElementById('sl-maxn').value=document.getElementById('sl-maxn').max;
+      document.getElementById('sv-maxn').textContent='All'; }
+    Object.assign(S, DEFAULTS, {excludeGroups:new Set()});
+    if(GD){ applyColour(); applyEdgeOpacity(); applyLabels(); applyArrows(); }
+  });
 });
 
 </script>
