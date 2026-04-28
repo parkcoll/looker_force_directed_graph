@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Org Network Analysis</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;background:#0f1117;color:#e8eaf0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.hdr{background:#1a1d27;border-bottom:1px solid #2d3148;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.hdr-logo{width:32px;height:32px;background:linear-gradient(135deg,#4c7fff,#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.hdr h1{font-size:16px;font-weight:600;color:#fff}
+.hdr-sub{font-size:11px;color:#8b90a8;margin-top:1px}
+.hdr-spacer{flex:1}
+.btn{cursor:pointer;border:none;border-radius:6px;font-size:12px;font-weight:500;padding:6px 13px;transition:all .15s;white-space:nowrap}
+.btn-ghost{background:transparent;color:#8b90a8;border:1px solid #2d3148}
+.btn-ghost:hover{background:#2d3148;color:#e8eaf0}
+.btn-primary{background:#4c7fff;color:#fff;border:none}
+.btn-primary:hover{background:#3d6de8}
+.btn-success{background:#10b981;color:#fff;border:none}
+.btn-success:hover{background:#059669}
+.btn-warn{background:#f59e0b;color:#fff;border:none}
+.btn-warn:hover{background:#d97706}
+.btn-on{background:#4c7fff22;color:#4c7fff;border:1px solid #4c7fff55}
+.input-section{background:#1a1d27;border-bottom:1px solid #2d3148;padding:14px 20px;flex-shrink:0}
+.input-wrap{display:flex;gap:14px;align-items:flex-start}
+.input-col{flex:1;min-width:0}
+.lbl{font-size:11px;font-weight:600;color:#8b90a8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+textarea{width:100%;background:#0f1117;border:1px solid #2d3148;border-radius:6px;color:#e8eaf0;font-family:monospace;font-size:11px;padding:7px 9px;resize:vertical;min-height:76px;outline:none}
+textarea:focus{border-color:#4c7fff55}
+textarea::placeholder{color:#3d4168}
+.file-drop{border:2px dashed #2d3148;border-radius:6px;padding:14px;text-align:center;cursor:pointer;background:#0f111766;transition:border-color .15s}
+.file-drop:hover,.file-drop.over{border-color:#4c7fff88}
+.file-drop strong{font-size:13px;color:#c8cad8;display:block;margin-bottom:3px}
+.file-drop p{font-size:11px;color:#8b90a8}
+.input-actions{display:flex;gap:8px;margin-top:10px;align-items:center}
+.hint{font-size:11px;color:#3d4168}
+.hint code{background:#2d3148;padding:1px 5px;border-radius:3px;color:#8b90a8;font-size:10px}
+.main{flex:1;display:flex;overflow:hidden;position:relative}
+.graph-wrap{flex:1;position:relative;overflow:hidden}
+#graph-svg{width:100%;height:100%;background:#0a0d14;display:block}
+.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
+.empty-state .ei{font-size:52px;opacity:.2}
+.empty-state p{font-size:14px;color:#4a5078}
+.legend{position:absolute;top:14px;left:14px;background:#1a1d27cc;border:1px solid #2d3148;border-radius:8px;padding:10px 12px;z-index:15;backdrop-filter:blur(4px);max-width:180px;display:none}
+.legend-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8b90a8;margin-bottom:7px}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ldot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.llabel{font-size:11px;color:#c8cad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toolbar{position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:20;display:none}
+.ap{width:0;background:#1a1d27;border-left:1px solid #2d3148;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s ease}
+.ap.open{width:370px}
+.ap-inner{width:370px;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.ap-head{padding:12px 14px;border-bottom:1px solid #2d3148;flex-shrink:0}
+.ap-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ap-title{font-size:13px;font-weight:600;color:#fff}
+.tabs{display:flex;gap:3px;flex-wrap:wrap}
+.tab{padding:4px 9px;font-size:11px;font-weight:500;border-radius:4px;cursor:pointer;border:1px solid #2d3148;color:#8b90a8;background:transparent;transition:all .12s}
+.tab.on{background:#4c7fff22;color:#4c7fff;border-color:#4c7fff44}
+.tab:hover:not(.on){background:#2d3148;color:#c8cad8}
+.ap-desc{font-size:11px;color:#8b90a8;margin-top:8px;line-height:1.55}
+.ap-filter{padding:9px 14px;border-bottom:1px solid #2d3148;flex-shrink:0}
+.ap-filter label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8b90a8;display:block;margin-bottom:4px}
+select{width:100%;background:#0f1117;border:1px solid #2d3148;border-radius:5px;color:#e8eaf0;font-size:12px;padding:5px 7px;outline:none;cursor:pointer}
+select:focus{border-color:#4c7fff44}
+.ap-list{flex:1;overflow-y:auto;padding:6px}
+.ap-list::-webkit-scrollbar{width:4px}
+.ap-list::-webkit-scrollbar-track{background:#0f1117}
+.ap-list::-webkit-scrollbar-thumb{background:#2d3148;border-radius:2px}
+.ap-row{display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:5px;cursor:pointer;transition:background .1s;border:1px solid transparent}
+.ap-row:hover{background:#2d314840}
+.ap-row.hi{background:#4c7fff22;border-color:#4c7fff33}
+.ap-rank{font-size:10px;color:#4a5078;width:18px;text-align:right;flex-shrink:0;font-weight:700}
+.ap-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ap-name{font-size:12px;color:#e8eaf0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.ap-grp{font-size:10px;color:#8b90a8;flex-shrink:0;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-bar{width:50px;flex-shrink:0}
+.ap-bar-bg{background:#2d3148;border-radius:2px;height:4px}
+.ap-bar-fill{background:#4c7fff;border-radius:2px;height:4px;transition:width .3s}
+.ap-score{font-size:10px;color:#8b90a8;width:30px;text-align:right;flex-shrink:0;font-family:monospace}
+.ap-summary{padding:10px 14px;border-top:1px solid #2d3148;flex-shrink:0;display:flex;gap:6px}
+.stat{flex:1;background:#0f1117;border-radius:5px;padding:7px;text-align:center}
+.stat-v{font-size:17px;font-weight:700;color:#4c7fff}
+.stat-l{font-size:9px;color:#8b90a8;margin-top:1px;text-transform:uppercase;letter-spacing:.3px}
+.tip{position:fixed;background:#1a1d27f0;border:1px solid #2d3148;border-radius:6px;padding:7px 10px;font-size:12px;pointer-events:none;z-index:200;max-width:190px;line-height:1.5;display:none}
+.tip-title{font-weight:600;color:#fff;margin-bottom:2px}
+.tip-row{color:#8b90a8}
+.tip-row span{color:#c8cad8}
+.loader{position:absolute;inset:0;background:#0a0d14cc;display:flex;align-items:center;justify-content:center;z-index:50;display:none}
+.spinner{width:30px;height:30px;border:3px solid #2d3148;border-top-color:#4c7fff;border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader p{font-size:12px;color:#8b90a8;text-align:center}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-logo">🕸</div>
+  <div>
+    <h1>Org Network Analysis</h1>
+    <div class="hdr-sub">Visualise and analyse organisational relationships</div>
+  </div>
+  <div class="hdr-spacer"></div>
+  <button class="btn btn-ghost" id="toggle-input-btn">Load New Data</button>
+</header>
+
+<div class="input-section" id="input-section">
+  <div class="input-wrap">
+    <div class="input-col">
+      <div class="lbl">Paste CSV Data</div>
+      <textarea id="paste-area" placeholder="source_node,destination_node,edge_weight,source_group,destination_group&#10;Alice,Bob,5,Engineering,Marketing&#10;Bob,Carol,3,Marketing,Sales&#10;..."></textarea>
+    </div>
+    <div class="input-col" style="max-width:200px;flex-shrink:0">
+      <div class="lbl">Or Upload CSV</div>
+      <div class="file-drop" id="file-drop">
+        <strong>📂 Click or drag file</strong>
+        <p>CSV / TSV accepted</p>
+        <input type="file" accept=".csv,.tsv,.txt" id="file-input" style="display:none">
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;padding-top:18px;flex-shrink:0">
+      <button class="btn btn-primary" id="load-btn">Load Graph</button>
+      <button class="btn btn-ghost" id="sample-btn">Try Sample Data</button>
+    </div>
+  </div>
+  <div class="input-actions">
+    <div class="hint">Columns: <code>source_node</code> <code>destination_node</code> <code>edge_weight</code> <code>source_group</code> <code>destination_group</code> — headers auto-detected, weight optional</div>
+  </div>
+</div>
+
+<div class="main" id="main">
+  <div class="graph-wrap" id="graph-wrap">
+    <svg id="graph-svg"></svg>
+    <div class="empty-state" id="empty-state">
+      <div class="ei">🕸</div>
+      <p>Load a CSV above to visualise your network</p>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="toolbar" id="toolbar">
+      <button class="btn btn-ghost" id="fit-btn">⊕ Fit</button>
+      <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
+      <button class="btn btn-success" id="analyze-btn">▶ Analyse Graph</button>
+    </div>
+    <div class="loader" id="loader">
+      <div><div class="spinner"></div><p>Computing metrics…</p></div>
+    </div>
+  </div>
+  <div class="ap" id="ap">
+    <div class="ap-inner">
+      <div class="ap-head">
+        <div class="ap-top">
+          <div class="ap-title">Network Analysis</div>
+          <button class="btn btn-ghost" id="close-ap" style="padding:3px 8px;font-size:11px">✕</button>
+        </div>
+        <div class="tabs" id="tabs">
+          <div class="tab on" data-m="indegree">In Demand</div>
+          <div class="tab" data-m="outdegree">Influencers</div>
+          <div class="tab" data-m="betweenness">Connectors</div>
+          <div class="tab" data-m="total">Networkers</div>
+        </div>
+        <div class="ap-desc" id="ap-desc"></div>
+      </div>
+      <div class="ap-filter">
+        <label>Filter by Group</label>
+        <select id="group-filter"></select>
+      </div>
+      <div class="ap-list" id="ap-list"></div>
+      <div class="ap-summary" id="ap-summary"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+
+const COLORS = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf','#aec7e8','#ffbb78','#98df8a','#ff9896'];
+const METRIC = {
+  indegree:    { label:'Employees in High Demand', desc:'People who receive the most incoming connections — sought out for expertise, advice, or approvals. Very high scores can indicate bottlenecks or key experts.' },
+  outdegree:   { label:'Top Influencers', desc:'People who actively reach out to the most others — information spreaders and engagement drivers who shape how ideas flow across the organisation.' },
+  betweenness: { label:'Key Connectors', desc:'People who sit on the most shortest-paths between others (betweenness centrality). They bridge otherwise disconnected groups — often invisible on org charts but critical to information flow.' },
+  total:       { label:'Top Networkers', desc:'People with the highest total connections (in + out). Natural hubs who maintain the broadest relationships across the organisation.' }
+};
+const SAMPLE = `source_node,destination_node,edge_weight,source_group,destination_group
+Sarah,James,9,Leadership,Leadership
+Sarah,Jordan,7,Leadership,Product
+Sarah,Chris,6,Leadership,Marketing
+Sarah,Taylor,6,Leadership,Sales
+Sarah,Maya,5,Leadership,Engineering
+James,Maya,9,Leadership,Engineering
+James,Tom,7,Leadership,Engineering
+James,Jordan,6,Leadership,Product
+Maya,Tom,8,Engineering,Engineering
+Maya,Alex,6,Engineering,Engineering
+Maya,Carlos,5,Engineering,Engineering
+Maya,Priya,7,Engineering,Engineering
+Maya,Jordan,8,Engineering,Product
+Tom,Maya,4,Engineering,Engineering
+Tom,Taylor,7,Engineering,Sales
+Tom,Blake,5,Engineering,Sales
+Alex,Maya,8,Engineering,Engineering
+Alex,Lisa,5,Engineering,Engineering
+Lisa,Alex,4,Engineering,Engineering
+Lisa,Maya,6,Engineering,Engineering
+Carlos,Maya,4,Engineering,Engineering
+Carlos,Chris,7,Engineering,Marketing
+Carlos,Dana,5,Engineering,Marketing
+Priya,Maya,5,Engineering,Engineering
+Priya,Jordan,4,Engineering,Product
+Jordan,Maya,5,Product,Engineering
+Jordan,Pat,7,Product,Product
+Jordan,Sam,6,Product,Product
+Jordan,Kim,5,Product,Product
+Jordan,Chris,8,Product,Marketing
+Jordan,Taylor,6,Product,Sales
+Pat,Jordan,4,Product,Product
+Pat,Chris,8,Product,Marketing
+Pat,Dana,6,Product,Marketing
+Sam,Jordan,5,Product,Product
+Kim,Jordan,4,Product,Product
+Chris,Dana,8,Marketing,Marketing
+Chris,Riley,6,Marketing,Marketing
+Chris,Morgan,5,Marketing,Marketing
+Dana,Chris,5,Marketing,Marketing
+Dana,Riley,6,Marketing,Marketing
+Dana,Taylor,7,Marketing,Sales
+Riley,Chris,7,Marketing,Marketing
+Morgan,Chris,6,Marketing,Marketing
+Taylor,Casey,7,Sales,Sales
+Taylor,Quinn,6,Sales,Sales
+Taylor,Blake,5,Sales,Sales
+Blake,Taylor,4,Sales,Sales
+Blake,Casey,6,Sales,Sales
+Casey,Taylor,7,Sales,Sales
+Casey,Quinn,5,Sales,Sales
+Quinn,Taylor,6,Sales,Sales`;
+
+let GD = null, SIM = null, SVG = null, ZG = null;
+let communities = null, showComm = false;
+let curMetric = 'indegree', curGroup = 'all', selNode = null;
+let colorScale = null;
+
+// ── PARSING ──────────────────────────────────────────────
+function parseCSV(raw) {
+  const lines = raw.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('Need at least a header row and one data row.');
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  const headers = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/['"]/g,''));
+  const col = detectCols(headers);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(sep).map(v => v.trim().replace(/^["']|["']$/g,''));
+    if (vals.length < 2) continue;
+    const src = vals[col.src] || '';
+    const dst = vals[col.dst] || '';
+    if (!src || !dst || src === dst) continue;
+    rows.push({
+      src, dst,
+      weight: col.w >= 0 ? (parseFloat(vals[col.w]) || 1) : 1,
+      srcGrp: col.sg >= 0 ? (vals[col.sg] || 'Default') : 'Default',
+      dstGrp: col.dg >= 0 ? (vals[col.dg] || 'Default') : 'Default'
+    });
+  }
+  if (!rows.length) throw new Error('No valid rows found. Check column names.');
+  return buildGraph(rows);
+}
+
+function detectCols(h) {
+  const find = (...terms) => { for (const t of terms) { const i = h.findIndex(x => x.includes(t)); if (i >= 0) return i; } return -1; };
+  return {
+    src: find('source_node','source','from','src','origin','sender','person_a','employee_a'),
+    dst: find('destination_node','destination','target','dest','to','recipient','person_b','employee_b'),
+    w:   find('edge_weight','weight','value','strength','count','frequency'),
+    sg:  find('source_group','src_group','from_group','group_a','team_a','dept_a','department_a','sourcegroup'),
+    dg:  find('destination_group','dest_group','target_group','group_b','team_b','dept_b','department_b','destgroup')
+  };
+}
+
+function buildGraph(rows) {
+  const nodeMap = new Map(), linkAgg = new Map();
+  const addNode = (id, grp) => { if (!nodeMap.has(id)) nodeMap.set(id, { id, group: grp }); };
+  rows.forEach(r => {
+    addNode(r.src, r.srcGrp); addNode(r.dst, r.dstGrp);
+    const key = r.src + '\x00' + r.dst;
+    linkAgg.set(key, (linkAgg.get(key) || 0) + r.weight);
+  });
+  const nodes = [...nodeMap.values()];
+  const links = [...linkAgg.entries()].map(([k, w]) => {
+    const [source, target] = k.split('\x00');
+    return { source, target, weight: w };
+  });
+  // mark bidirectional
+  const lset = new Set(links.map(l => l.source + '|' + l.target));
+  links.forEach(l => { l.bi = lset.has(l.target + '|' + l.source); });
+  return { nodes, links };
+}
+
+// ── METRICS ──────────────────────────────────────────────
+function computeMetrics(nodes, links) {
+  const idx = new Map(); nodes.forEach((d,i) => idx.set(d.id, i));
+  const n = nodes.length;
+  const ind = new Array(n).fill(0), outd = new Array(n).fill(0);
+  links.forEach(l => {
+    const s = idx.get(l.source.id || l.source), t = idx.get(l.target.id || l.target);
+    if (s != null) outd[s]++;
+    if (t != null) ind[t]++;
+  });
+  const bc = brandsBetweenness(nodes, links, idx);
+  nodes.forEach((d,i) => {
+    d.indegree = ind[i]; d.outdegree = outd[i];
+    d.total = ind[i] + outd[i]; d.betweenness = bc[i];
+  });
+}
+
+function brandsBetweenness(nodes, links, idx) {
+  const n = nodes.length;
+  const adj = Array.from({length:n}, () => []);
+  links.forEach(l => {
+    const s = idx.get(l.source.id || l.source), t = idx.get(l.target.id || l.target);
+    if (s != null && t != null && s !== t) adj[s].push(t);
+  });
+  const bc = new Array(n).fill(0);
+  for (let s = 0; s < n; s++) {
+    const stack=[], pred=Array.from({length:n},()=>[]);
+    const sigma=new Array(n).fill(0); sigma[s]=1;
+    const dist=new Array(n).fill(-1); dist[s]=0;
+    const q=[s]; let qi=0;
+    while (qi < q.length) {
+      const v=q[qi++]; stack.push(v);
+      for (const w of adj[v]) {
+        if (dist[w]<0){q.push(w);dist[w]=dist[v]+1;}
+        if (dist[w]===dist[v]+1){sigma[w]+=sigma[v];pred[w].push(v);}
+      }
+    }
+    const delta=new Array(n).fill(0);
+    while (stack.length){
+      const w=stack.pop();
+      for (const v of pred[w]) delta[v]+=(sigma[v]/sigma[w])*(1+delta[w]);
+      if (w!==s) bc[w]+=delta[w];
+    }
+  }
+  const norm=(n-1)*(n-2); return bc.map(v=>norm>0?v/norm:0);
+}
+
+// ── COMMUNITY DETECTION ──────────────────────────────────
+function labelPropagation(nodes, links) {
+  const n=nodes.length, idx=new Map();
+  nodes.forEach((d,i)=>idx.set(d.id,i));
+  const adj=Array.from({length:n},()=>[]);
+  links.forEach(l=>{
+    const s=idx.get(l.source.id||l.source), t=idx.get(l.target.id||l.target);
+    if(s!=null&&t!=null&&s!==t){adj[s].push(t);adj[t].push(s);}
+  });
+  const labels=Array.from({length:n},(_,i)=>i);
+  for(let iter=0;iter<40;iter++){
+    let changed=false;
+    const order=d3.shuffle(Array.from({length:n},(_,i)=>i));
+    for(const v of order){
+      if(!adj[v].length) continue;
+      const freq=new Map();
+      for(const u of adj[v]) freq.set(labels[u],(freq.get(labels[u])||0)+1);
+      let best=labels[v],bv=0;
+      for(const [l,f] of freq) if(f>bv){bv=f;best=l;}
+      if(best!==labels[v]){labels[v]=best;changed=true;}
+    }
+    if(!changed) break;
+  }
+  const uniq=[...new Set(labels)].sort((a,b)=>a-b);
+  const remap=new Map(); uniq.forEach((l,i)=>remap.set(l,i));
+  return nodes.map((_,i)=>remap.get(labels[i]));
+}
+
+// ── GRAPH RENDER ─────────────────────────────────────────
+const COMM_COLORS=['#4c7fff','#ff6b35','#43d39e','#f7c948','#d94fff','#ff4c88','#4cd9ff','#ffaa4c','#c8ff4c','#ff4c4c'];
+
+function nodeR(d){ return 10 + Math.sqrt((d.total||0)/Math.max(...GD.nodes.map(n=>n.total||1)))*14; }
+
+function linkPath(d){
+  const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
+  const dx=tx-sx,dy=ty-sy,len=Math.sqrt(dx*dx+dy*dy)||1;
+  const rs=nodeR(d.source), rt=nodeR(d.target)+11;
+  const x1=sx+dx/len*rs, y1=sy+dy/len*rs;
+  const x2=tx-dx/len*rt, y2=ty-dy/len*rt;
+  if(!d.bi) return `M${x1},${y1}L${x2},${y2}`;
+  const off=Math.min(len*0.25,55);
+  const mx=(x1+x2)/2-dy/len*off, my=(y1+y2)/2+dx/len*off;
+  return `M${x1},${y1}Q${mx},${my},${x2},${y2}`;
+}
+
+function renderGraph(data){
+  GD=data; selNode=null; communities=null; showComm=false;
+  const wrap=document.getElementById('graph-wrap');
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  colorScale=d3.scaleOrdinal(COLORS).domain([...new Set(data.nodes.map(d=>d.group))]);
+
+  const svgEl=document.getElementById('graph-svg');
+  const svg=d3.select(svgEl); svg.selectAll('*').remove(); SVG=svg;
+
+  const defs=svg.append('defs');
+  COLORS.forEach((c,i)=>{
+    defs.append('marker').attr('id',`arr${i}`).attr('viewBox','0 -5 10 10')
+      .attr('refX',8).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
+      .append('path').attr('d','M0,-5L10,0L0,5').attr('fill',c);
+  });
+
+  const zoom=d3.zoom().scaleExtent([0.05,8]).on('zoom',e=>ZG.attr('transform',e.transform));
+  svg.call(zoom);
+  ZG=svg.append('g');
+
+  const hullG=ZG.append('g').attr('class','hulls');
+  const linkG=ZG.append('g').attr('class','links');
+  const nodeG=ZG.append('g').attr('class','nodes');
+
+  // place nodes in a circle initially
+  data.nodes.forEach((d,i)=>{
+    const a=(i/data.nodes.length)*2*Math.PI;
+    d.x=W/2+Math.cos(a)*Math.min(W,H)*0.3;
+    d.y=H/2+Math.sin(a)*Math.min(W,H)*0.3;
+  });
+
+  const weights=data.links.map(l=>l.weight);
+  const wMin=Math.min(...weights),wMax=Math.max(...weights)||1;
+  const edgeT=w=>(w-wMin)/(wMax-wMin||1);
+
+  const link=linkG.selectAll('path').data(data.links).join('path')
+    .attr('fill','none')
+    .attr('stroke',d=>colorScale(d.srcGrp||d.source.group||''))
+    .attr('stroke-width',d=>1.5+edgeT(d.weight)*5)
+    .attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65)
+    .attr('marker-end',d=>`url(#arr${COLORS.indexOf(colorScale(d.srcGrp||d.source.group||''))%COLORS.length})`);
+
+  const tip=document.getElementById('tip');
+  link.on('mousemove',(e,d)=>{
+    const sn=d.source.id||d.source, tn=d.target.id||d.target;
+    tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-28)+'px';
+    tip.innerHTML=`<div class="tip-title">${sn} → ${tn}</div><div class="tip-row">Weight: <span>${d.weight}</span></div>`;
+  }).on('mouseleave',()=>tip.style.display='none');
+
+  const drag=d3.drag()
+    .on('start',(e,d)=>{if(!e.active)SIM.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;})
+    .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y;})
+    .on('end',(e,d)=>{if(!e.active)SIM.alphaTarget(0);d.fx=e.x;d.fy=e.y;});
+
+  const node=nodeG.selectAll('g').data(data.nodes).join('g').call(drag).style('cursor','pointer');
+  node.append('circle').attr('r',d=>nodeR(d)).attr('fill',d=>colorScale(d.group)).attr('stroke','#fff').attr('stroke-width',2);
+  node.append('text').text(d=>d.id.length>20?d.id.slice(0,19)+'…':d.id)
+    .attr('text-anchor','middle').attr('dy',d=>nodeR(d)+13)
+    .attr('font-size','11px').attr('font-weight','bold').attr('fill','#e8eaf0')
+    .attr('paint-order','stroke').attr('stroke','#0a0d14').attr('stroke-width',3);
+
+  node.on('mousemove',(e,d)=>{
+    if(selNode) return;
+    tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY-28)+'px';
+    tip.innerHTML=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">Connections: <span>${d.total}</span></div>`;
+  }).on('mouseleave',()=>{if(!selNode)tip.style.display='none';})
+  .on('click',(e,d)=>{e.stopPropagation();selectNode(d,node,link);});
+
+  svg.on('click',()=>clearSelection(node,link));
+
+  SIM=d3.forceSimulation(data.nodes)
+    .force('link',d3.forceLink(data.links).id(d=>d.id).distance(d=>60+100/(edgeT(d.weight)+0.1)).strength(0.7))
+    .force('charge',d3.forceManyBody().strength(-600))
+    .force('x',d3.forceX(W/2).strength(0.04))
+    .force('y',d3.forceY(H/2).strength(0.04))
+    .force('collide',d3.forceCollide().radius(d=>nodeR(d)+18))
+    .on('tick',()=>{
+      link.attr('d',linkPath);
+      node.attr('transform',d=>`translate(${d.x},${d.y})`);
+      if(showComm) drawHulls(hullG);
+    });
+
+  document.getElementById('graph-svg').addEventListener('_fitview',()=>{
+    const b=ZG.node().getBBox();
+    const s=Math.min(0.9*W/b.width,0.9*H/b.height,2);
+    svg.transition().duration(500).call(zoom.transform,d3.zoomIdentity.translate(W/2-s*(b.x+b.width/2),H/2-s*(b.y+b.height/2)).scale(s));
+  });
+
+  renderLegend();
+  document.getElementById('legend').style.display='block';
+  document.getElementById('toolbar').style.display='flex';
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('input-section').style.display='none';
+}
+
+function selectNode(d, nodeSel, linkSel){
+  selNode = d.id;
+  const tip=document.getElementById('tip');
+  tip.style.display='block';
+  tip.innerHTML=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">In-degree: <span>${d.indegree}</span></div><div class="tip-row">Out-degree: <span>${d.outdegree}</span></div><div class="tip-row">Total: <span>${d.total}</span></div>`;
+  nodeSel.select('circle')
+    .attr('fill',n=>n.id===d.id?colorScale(n.group):'#3a3d50')
+    .attr('fill-opacity',n=>n.id===d.id?1:0.35);
+  nodeSel.select('text').attr('fill',n=>n.id===d.id?'#e8eaf0':'#5a5d78');
+  linkSel.attr('stroke-opacity',l=>{
+    const s=l.source.id||l.source, t=l.target.id||l.target;
+    return (s===d.id||t===d.id)?0.9:0.05;
+  });
+  // highlight in analysis panel
+  document.querySelectorAll('.ap-row').forEach(r=>{
+    r.classList.toggle('hi', r.dataset.id===d.id);
+  });
+}
+
+function clearSelection(nodeSel, linkSel){
+  selNode=null;
+  document.getElementById('tip').style.display='none';
+  const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
+  const edgeT=w=>(w-wMin)/(wMax-wMin||1);
+  nodeSel.select('circle').attr('fill',d=>colorScale(d.group)).attr('fill-opacity',1);
+  nodeSel.select('text').attr('fill','#e8eaf0');
+  linkSel.attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65);
+  document.querySelectorAll('.ap-row').forEach(r=>r.classList.remove('hi'));
+}
+
+function drawHulls(hullG){
+  hullG.selectAll('*').remove();
+  if(!communities||!showComm) return;
+  const byComm=new Map();
+  GD.nodes.forEach((d,i)=>{
+    const c=communities[i];
+    if(!byComm.has(c)) byComm.set(c,[]);
+    byComm.get(c).push(d);
+  });
+  byComm.forEach((ns,ci)=>{
+    const col=COMM_COLORS[ci%COMM_COLORS.length];
+    const pts=ns.map(d=>[d.x,d.y]);
+    if(ns.length===1){
+      hullG.append('circle').attr('cx',ns[0].x).attr('cy',ns[0].y).attr('r',nodeR(ns[0])+28)
+        .attr('fill',col).attr('fill-opacity',0.1).attr('stroke',col).attr('stroke-opacity',0.5)
+        .attr('stroke-width',2).attr('stroke-dasharray','5,3');
+    } else if(ns.length===2){
+      const [a,b]=ns, cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+      const dx=b.x-a.x, dy=b.y-a.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+      const ang=Math.atan2(dy,dx)*180/Math.PI;
+      hullG.append('ellipse').attr('cx',cx).attr('cy',cy).attr('rx',len/2+38).attr('ry',28)
+        .attr('transform',`rotate(${ang},${cx},${cy})`)
+        .attr('fill',col).attr('fill-opacity',0.1).attr('stroke',col).attr('stroke-opacity',0.5)
+        .attr('stroke-width',2).attr('stroke-dasharray','5,3');
+    } else {
+      const hull=d3.polygonHull(pts); if(!hull) return;
+      const cen=d3.polygonCentroid(hull);
+      const exp=hull.map(([x,y])=>{const dx=x-cen[0],dy=y-cen[1],l=Math.sqrt(dx*dx+dy*dy)||1;return[x+dx/l*48,y+dy/l*48];});
+      const line=d3.line().x(d=>d[0]).y(d=>d[1]).curve(d3.curveCatmullRomClosed.alpha(0.5));
+      hullG.append('path').attr('d',line(exp))
+        .attr('fill',col).attr('fill-opacity',0.08).attr('stroke',col).attr('stroke-opacity',0.45)
+        .attr('stroke-width',2).attr('stroke-dasharray','6,4');
+      // label at topmost node
+      const top=ns.reduce((a,b)=>a.y<b.y?a:b);
+      hullG.append('text').attr('x',cen[0]).attr('y',top.y-42)
+        .attr('text-anchor','middle').attr('font-size','11px').attr('font-weight','700')
+        .attr('fill',col).attr('opacity',0.9).text(`Community ${ci+1}`);
+    }
+  });
+}
+
+function renderLegend(){
+  const el=document.getElementById('legend');
+  const groups=[...new Set(GD.nodes.map(d=>d.group))];
+  el.innerHTML=`<div class="legend-title">Groups</div>`;
+  groups.slice(0,14).forEach(g=>{
+    el.insertAdjacentHTML('beforeend',`<div class="legend-item"><div class="ldot" style="background:${colorScale(g)}"></div><div class="llabel">${g}</div></div>`);
+  });
+  if(groups.length>14) el.insertAdjacentHTML('beforeend',`<div style="font-size:10px;color:#8b90a8;margin-top:3px">+${groups.length-14} more</div>`);
+}
+
+// ── ANALYSIS PANEL ───────────────────────────────────────
+function openPanel(){
+  document.getElementById('ap').classList.add('open');
+  renderPanel();
+}
+function closePanel(){ document.getElementById('ap').classList.remove('open'); }
+
+function renderPanel(){
+  // metric desc
+  document.getElementById('ap-desc').textContent=METRIC[curMetric].desc;
+  // group filter options
+  const groups=['all',...new Set(GD.nodes.map(d=>d.group))];
+  const sel=document.getElementById('group-filter');
+  sel.innerHTML=groups.map(g=>`<option value="${g}">${g==='all'?'All Groups':g}</option>`).join('');
+  sel.value=curGroup;
+  renderList();
+  renderSummary();
+}
+
+function renderList(){
+  const m=curMetric;
+  let nodes=[...GD.nodes];
+  if(curGroup!=='all') nodes=nodes.filter(d=>d.group===curGroup);
+  nodes.sort((a,b)=>b[m]-a[m]);
+  const maxV=nodes[0]?nodes[0][m]:1;
+  const list=document.getElementById('ap-list');
+  list.innerHTML='';
+  nodes.forEach((d,i)=>{
+    const pct=maxV>0?(d[m]/maxV*100).toFixed(0):0;
+    const score=m==='betweenness'?d[m].toFixed(3):d[m];
+    const col=colorScale(d.group);
+    const row=document.createElement('div');
+    row.className='ap-row'+(selNode===d.id?' hi':'');
+    row.dataset.id=d.id;
+    row.innerHTML=`<div class="ap-rank">${i+1}</div><div class="ap-dot" style="background:${col}"></div><div class="ap-name">${d.id}</div><div class="ap-grp">${d.group}</div><div class="ap-bar"><div class="ap-bar-bg"><div class="ap-bar-fill" style="width:${pct}%"></div></div></div><div class="ap-score">${score}</div>`;
+    row.addEventListener('click',()=>{ highlightFromPanel(d); });
+    list.appendChild(row);
+  });
+}
+
+function renderSummary(){
+  const n=GD.nodes.length, e=GD.links.length;
+  const maxPoss=n*(n-1);
+  const density=(maxPoss>0?e/maxPoss*100:0).toFixed(1);
+  const groups=[...new Set(GD.nodes.map(d=>d.group))];
+  const crossEdges=GD.links.filter(l=>{
+    const sg=l.source.group||l.source, tg=l.target.group||l.target;
+    return sg!==tg;
+  }).length;
+  const crossPct=e>0?(crossEdges/e*100).toFixed(0):0;
+  document.getElementById('ap-summary').innerHTML=
+    `<div class="stat"><div class="stat-v">${n}</div><div class="stat-l">Nodes</div></div>`+
+    `<div class="stat"><div class="stat-v">${e}</div><div class="stat-l">Edges</div></div>`+
+    `<div class="stat"><div class="stat-v">${density}%</div><div class="stat-l">Density</div></div>`+
+    `<div class="stat"><div class="stat-v">${crossPct}%</div><div class="stat-l">Cross-team</div></div>`;
+}
+
+function highlightFromPanel(d){
+  const nodeSel=d3.selectAll('#graph-svg .nodes g');
+  const linkSel=d3.selectAll('#graph-svg .links path');
+  selectNode(d, nodeSel, linkSel);
+}
+
+// ── EVENT HANDLERS + INIT ────────────────────────────────
+function loadGraph(raw){
+  let data;
+  try { data=parseCSV(raw); }
+  catch(e){ alert('Parse error: '+e.message); return; }
+  document.getElementById('loader').style.display='flex';
+  // small delay to let loader paint, then compute betweenness (can be slow)
+  setTimeout(()=>{
+    computeMetrics(data.nodes, data.links);
+    renderGraph(data);
+    document.getElementById('loader').style.display='none';
+    // fit view after sim settles
+    setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')),800);
+  },30);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  // tab switching
+  document.getElementById('tabs').addEventListener('click',e=>{
+    const t=e.target.closest('.tab'); if(!t) return;
+    curMetric=t.dataset.m;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    if(GD) renderPanel();
+  });
+
+  // group filter
+  document.getElementById('group-filter').addEventListener('change',e=>{
+    curGroup=e.target.value; renderList();
+  });
+
+  // load button
+  document.getElementById('load-btn').addEventListener('click',()=>{
+    const txt=document.getElementById('paste-area').value.trim();
+    if(!txt){alert('Paste some CSV data first.');return;}
+    loadGraph(txt);
+  });
+
+  // sample data
+  document.getElementById('sample-btn').addEventListener('click',()=>{
+    document.getElementById('paste-area').value=SAMPLE;
+    loadGraph(SAMPLE);
+  });
+
+  // file upload
+  const fi=document.getElementById('file-input');
+  document.getElementById('file-drop').addEventListener('click',()=>fi.click());
+  fi.addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=ev=>{ document.getElementById('paste-area').value=ev.target.result; loadGraph(ev.target.result); }; r.readAsText(f);
+  });
+  const fd=document.getElementById('file-drop');
+  fd.addEventListener('dragover',e=>{e.preventDefault();fd.classList.add('over');});
+  fd.addEventListener('dragleave',()=>fd.classList.remove('over'));
+  fd.addEventListener('drop',e=>{
+    e.preventDefault(); fd.classList.remove('over');
+    const f=e.dataTransfer.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=ev=>{ document.getElementById('paste-area').value=ev.target.result; loadGraph(ev.target.result); }; r.readAsText(f);
+  });
+
+  // toggle input panel
+  document.getElementById('toggle-input-btn').addEventListener('click',()=>{
+    const s=document.getElementById('input-section');
+    s.style.display=s.style.display==='none'?'block':'none';
+  });
+
+  // fit button
+  document.getElementById('fit-btn').addEventListener('click',()=>{
+    document.getElementById('graph-svg').dispatchEvent(new Event('_fitview'));
+  });
+
+  // detect groups button
+  document.getElementById('detect-btn').addEventListener('click',()=>{
+    if(!GD) return;
+    if(!communities) communities=labelPropagation(GD.nodes, GD.links);
+    showComm=!showComm;
+    const btn=document.getElementById('detect-btn');
+    btn.className=showComm?'btn btn-on':'btn btn-ghost';
+    btn.textContent=showComm?'◉ Hide Groups':'◉ Detect Groups';
+    // redraw hulls (or clear)
+    const hullG=d3.select('#graph-svg .hulls');
+    if(!showComm){hullG.selectAll('*').remove();}
+    else if(SIM) SIM.alpha(0.01).restart(); // nudge to trigger tick
+  });
+
+  // analyse button
+  document.getElementById('analyze-btn').addEventListener('click',()=>{
+    if(!GD) return;
+    const ap=document.getElementById('ap');
+    if(ap.classList.contains('open')){ closePanel(); }
+    else { openPanel(); }
+  });
+
+  // close panel
+  document.getElementById('close-ap').addEventListener('click',closePanel);
+});
+
+</script>
+</body>
+</html>
