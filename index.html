@@ -322,6 +322,20 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
 .sp-footer{padding:12px 14px;border-top:1px solid #2d3148;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
 .sp-reset{font-size:11px;color:#8b90a8;text-align:center;cursor:pointer;text-decoration:underline;background:none;border:none;cursor:pointer}
 .sp-reset:hover{color:#c8cad8}
+/* canvas renderer */
+#graph-canvas{width:100%;height:100%;position:absolute;inset:0;display:none;touch-action:none;cursor:default}
+/* search */
+#search-wrap{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:30;display:none;width:280px;max-width:calc(100% - 32px)}
+#search-input{width:100%;background:#1a1d27;border:1px solid #4c7fff;border-radius:7px;color:#e8eaf0;font-size:13px;padding:7px 62px 7px 12px;outline:none;box-shadow:0 4px 20px #00000055}
+#search-count{position:absolute;right:34px;top:50%;transform:translateY(-50%);font-size:10px;color:#8b90a8;pointer-events:none;min-width:28px;text-align:right}
+#search-close-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8b90a8;cursor:pointer;font-size:14px;line-height:1;padding:2px 5px}
+body.theme-light #search-input{background:#fff;color:#1e2230;box-shadow:0 4px 12px #0000001a}
+body.theme-neon #search-input{background:#060810;border-color:#00d4ff;color:#c8f0ff;box-shadow:0 4px 20px #00d4ff22}
+body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color:#d4e4f7}
+/* simulate button — hidden until node selected */
+#simulate-btn{display:none}
+/* keyboard hint bar */
+.kb-hint{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);font-size:10px;color:#3d4168;pointer-events:none;white-space:nowrap;z-index:5;display:none}
 </style>
 </head>
 <body>
@@ -480,6 +494,12 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
               <label class="toggle-sw"><input type="checkbox" id="tgl-arrows" checked><div class="toggle-track"></div></label>
             </div>
           </div>
+          <div class="sp-row">
+            <div class="sp-toggle">
+              <span>Canvas renderer <span style="font-size:9px;color:#8b90a8">faster for 500+ nodes</span></span>
+              <label class="toggle-sw"><input type="checkbox" id="tgl-canvas"><div class="toggle-track"></div></label>
+            </div>
+          </div>
         </div>
 
         <div class="sp-section">
@@ -523,18 +543,29 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
 
   <div class="graph-wrap" id="graph-wrap">
     <svg id="graph-svg"></svg>
+    <canvas id="graph-canvas" aria-label="Network graph"></canvas>
+    <div id="search-wrap">
+      <div style="position:relative">
+        <input id="search-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search people or groups…">
+        <span id="search-count"></span>
+        <button id="search-close-btn" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="kb-hint" id="kb-hint">/ search · F fit · Esc clear · G group view · H health</div>
     <div class="empty-state" id="empty-state">
       <div class="ei">🕸</div>
       <p>Load a CSV above to visualise your network</p>
     </div>
     <div class="legend" id="legend"></div>
     <div class="toolbar" id="toolbar">
-      <button class="btn btn-ghost" id="fit-btn">⊕ Fit</button>
-      <button class="btn btn-ghost" id="settings-btn">⚙ Settings</button>
+      <button class="btn btn-ghost" id="fit-btn" title="Fit view (F)">⊕ Fit</button>
+      <button class="btn btn-ghost" id="search-btn" title="Search (/)">🔍 Search</button>
+      <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
-      <button class="btn btn-warn" id="health-btn">❤ Health</button>
-      <button class="btn btn-success" id="analyze-btn">▶ Analyse</button>
+      <button class="btn btn-warn" id="simulate-btn" title="Simulate removing this person">⚡ If they left…</button>
+      <button class="btn btn-warn" id="health-btn" title="Network Health (H)">❤ Health</button>
+      <button class="btn btn-success" id="analyze-btn" title="Analyse Graph (A)">▶ Analyse</button>
     </div>
     <div class="loader" id="loader">
       <div><div class="spinner"></div><p>Computing metrics…</p></div>
@@ -1334,6 +1365,7 @@ function getEdgeColor(d) {
 }
 
 function applyEdgeColour() {
+  if (useCanvas){drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .links path').attr('stroke', d => getEdgeColor(d));
 }
 
@@ -1352,6 +1384,7 @@ function getNodeColor(d) {
 }
 
 function applyColour() {
+  if (useCanvas){drawCanvasFrame();renderLegend();return;}
   d3.selectAll('#graph-svg .nodes circle').attr('fill', d => getNodeColor(d));
   if (edgeColMode === 'node') applyEdgeColour();
   renderLegend();
@@ -1359,6 +1392,7 @@ function applyColour() {
 
 function applyNodeSize() {
   if (!GD) return;
+  if (useCanvas){if(SIM){SIM.force('collide').radius(d=>nodeR(d)+14);SIM.alpha(0.15).restart();}drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .nodes circle').attr('r', d => nodeR(d));
   d3.selectAll('#graph-svg .nodes text').attr('dy', d => nodeR(d) + 13);
   if (SIM) { SIM.force('collide').radius(d => nodeR(d)+14); SIM.alpha(0.15).restart(); }
@@ -1366,6 +1400,7 @@ function applyNodeSize() {
 
 function applyEdgeOpacity() {
   if (!GD) return;
+  if (useCanvas){drawCanvasFrame();return;}
   const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
   const edgeT=w=>(w-wMin)/(wMax-wMin||1);
   d3.selectAll('#graph-svg .links path')
@@ -1373,10 +1408,12 @@ function applyEdgeOpacity() {
 }
 
 function applyLabels() {
+  if (useCanvas){drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .nodes text').attr('display', S.showLabels ? null : 'none');
 }
 
 function applyArrows() {
+  if (useCanvas){drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .links path')
     .attr('marker-end', d => S.showArrows
       ? `url(#arr${COLORS.indexOf(colorScale(d.source.group||''))%COLORS.length})`
@@ -1385,6 +1422,7 @@ function applyArrows() {
 
 function applyEdgeCurve() {
   if (!GD) return;
+  if (useCanvas){drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .links path').attr('d', d => {
     const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
     const dx=tx-sx,dy=ty-sy,len=Math.sqrt(dx*dx+dy*dy)||1;
@@ -1417,10 +1455,12 @@ function applyTheme(name) {
   if (GD) {
     colorScale = d3.scaleOrdinal(COLORS).domain([...new Set(GD.nodes.map(d => d.group))]);
     applyColour();
-    d3.selectAll('#graph-svg .links path').attr('stroke', d => colorScale(d.srcGrp || (d.source && d.source.group) || ''));
-    d3.selectAll('#graph-svg defs marker').each(function(_, i) {
-      d3.select(this).select('path').attr('fill', COLORS[i % COLORS.length]);
-    });
+    if (!useCanvas) {
+      d3.selectAll('#graph-svg .links path').attr('stroke', d => colorScale(d.srcGrp || (d.source && d.source.group) || ''));
+      d3.selectAll('#graph-svg defs marker').each(function(_, i) {
+        d3.select(this).select('path').attr('fill', COLORS[i % COLORS.length]);
+      });
+    }
     renderLegend();
   }
 }
@@ -1451,6 +1491,295 @@ function linkPath(d){
   return `M${x1},${y1}Q${mx},${my},${x2},${y2}`;
 }
 
+// ── CANVAS RENDERER ──────────────────────────────────────
+let useCanvas = false, canvasT = d3.zoomIdentity, canvasEventsReady = false;
+let LINK_SEL = null, NODE_SEL = null, HULL_G_REF = null, SVG_ZOOM = null;
+const CANVAS_BG = { dark:'#0a0d14', light:'#f0f4f9', corporate:'#070f1c', neon:'#030508' };
+
+function resizeCanvas() {
+  const c = document.getElementById('graph-canvas');
+  const w = document.getElementById('graph-wrap');
+  c.width = w.clientWidth; c.height = w.clientHeight;
+}
+
+function canvasArrow(ctx, x1, y1, x2, y2) {
+  const dx=x2-x1, dy=y2-y1, l=Math.sqrt(dx*dx+dy*dy)||1, ux=dx/l, uy=dy/l;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-9*ux-5*uy, y2-9*uy+5*ux);
+  ctx.lineTo(x2-9*ux+5*uy, y2-9*uy-5*ux);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawCanvasFrame() {
+  const canvas = document.getElementById('graph-canvas');
+  if (!canvas || !GD) return;
+  const ctx = canvas.getContext('2d'), t = canvasT;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = CANVAS_BG[curTheme] || '#0a0d14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
+
+  const weights = GD.links.map(l=>l.weight);
+  const wMn = Math.min(...weights)||0, wMx = Math.max(...weights)||1;
+  const eT = w => (w-wMn)/(wMx-wMn||1);
+
+  // Edges
+  GD.links.forEach(l => {
+    if (l.source.x==null||l.target.x==null) return;
+    const sx=l.source.x,sy=l.source.y,tx=l.target.x,ty=l.target.y;
+    const dx=tx-sx,dy=ty-sy,len=Math.sqrt(dx*dx+dy*dy)||1;
+    const rs=nodeR(l.source),rt=nodeR(l.target)+9;
+    const x1=sx+dx/len*rs,y1=sy+dy/len*rs,x2=tx-dx/len*rt,y2=ty-dy/len*rt;
+    const col = getEdgeColor(l);
+    const selDim = selNode && l.source.id!==selNode && l.target.id!==selNode;
+    const schDim = searchMatchIds && !searchMatchIds.has(l.source.id) && !searchMatchIds.has(l.target.id);
+    const op = schDim ? 0.03 : selDim ? 0.04 : S.edgeOpacity*(0.2+eT(l.weight)*0.65);
+    ctx.globalAlpha = op; ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5+eT(l.weight)*5;
+    ctx.beginPath();
+    if (l.bi && S.edgeCurve>0) {
+      const off=Math.min(len*S.edgeCurve,80);
+      ctx.moveTo(x1,y1);
+      ctx.quadraticCurveTo((x1+x2)/2-dy/len*off,(y1+y2)/2+dx/len*off,x2,y2);
+    } else { ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); }
+    ctx.stroke();
+    if (S.showArrows && !selDim && !schDim) { ctx.fillStyle=col; canvasArrow(ctx,x1,y1,x2,y2); }
+  });
+
+  // Nodes
+  GD.nodes.forEach(d => {
+    if (d.x==null) return;
+    const r=nodeR(d);
+    const selDim = selNode && selNode!==d.id;
+    const schDim = searchMatchIds && !searchMatchIds.has(d.id);
+    ctx.globalAlpha = (selDim||schDim) ? 0.18 : 1;
+    ctx.beginPath(); ctx.arc(d.x,d.y,r,0,Math.PI*2);
+    ctx.fillStyle = getNodeColor(d); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    if (searchMatchIds && searchMatchIds.has(d.id)) {
+      ctx.globalAlpha=0.85; ctx.beginPath(); ctx.arc(d.x,d.y,r+5,0,Math.PI*2);
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
+    }
+    if (S.showLabels) {
+      ctx.globalAlpha = (selDim||schDim) ? 0.12 : 1;
+      const lbl = d.id.length>20 ? d.id.slice(0,19)+'…' : d.id;
+      ctx.font = `bold 11px "Segoe UI",sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.lineWidth=3; ctx.strokeStyle = curTheme==='light'?'#f0f4f9':'#0a0d14';
+      ctx.strokeText(lbl, d.x, d.y+r+13);
+      ctx.fillStyle = curTheme==='light'?'#1e2230':'#e8eaf0';
+      ctx.fillText(lbl, d.x, d.y+r+13);
+    }
+  });
+  ctx.restore();
+}
+
+function screenToGraph(cx, cy) {
+  const c=document.getElementById('graph-canvas'), rect=c.getBoundingClientRect();
+  return [(cx-rect.left-canvasT.x)/canvasT.k, (cy-rect.top-canvasT.y)/canvasT.k];
+}
+function hitNode(gx, gy) {
+  if (!GD) return null;
+  for (let i=GD.nodes.length-1;i>=0;i--) {
+    const d=GD.nodes[i]; if(d.x==null) continue;
+    const dx=d.x-gx,dy=d.y-gy;
+    if (dx*dx+dy*dy<=nodeR(d)*nodeR(d)) return d;
+  }
+  return null;
+}
+
+function initCanvasEvents() {
+  if (canvasEventsReady) return; canvasEventsReady = true;
+  const canvas = document.getElementById('graph-canvas');
+  const cz = d3.zoom().scaleExtent([0.05,8]).on('zoom', e=>{canvasT=e.transform; if(useCanvas) drawCanvasFrame();});
+  d3.select(canvas).call(cz);
+  let drag=null, dragMoved=false, pid=null;
+  canvas.addEventListener('pointerdown', e=>{
+    const [gx,gy]=screenToGraph(e.clientX,e.clientY), hit=hitNode(gx,gy);
+    if (hit){drag=hit;dragMoved=false;pid=e.pointerId;canvas.setPointerCapture(pid);
+      SIM.alphaTarget(0.3).restart();hit.fx=gx;hit.fy=gy;e.stopPropagation();}
+  });
+  canvas.addEventListener('pointermove', e=>{
+    if (drag&&e.pointerId===pid){const [gx,gy]=screenToGraph(e.clientX,e.clientY);drag.fx=gx;drag.fy=gy;dragMoved=true;return;}
+    if (!drag&&!selNode){
+      const [gx,gy]=screenToGraph(e.clientX,e.clientY), hit=hitNode(gx,gy);
+      if (hit){const extra=hit.isGroup?`<div class="tip-row">Members: <span>${hit.memberCount}</span></div>`:`<div class="tip-row">Connections: <span>${hit.total}</span></div>`;
+        placeTip(e,`<div class="tip-title">${hit.id}</div><div class="tip-row">Group: <span>${hit.group}</span></div>${extra}`);}
+      else document.getElementById('tip').style.display='none';
+    }
+  });
+  canvas.addEventListener('pointerup', e=>{
+    if (drag&&e.pointerId===pid){
+      if (!dragMoved){const [gx,gy]=screenToGraph(e.clientX,e.clientY),hit=hitNode(gx,gy);
+        if(hit) selectNodeCanvas(hit,e); else{selNode=null;document.getElementById('tip').style.display='none';updateSimulateBtn();drawCanvasFrame();}}
+      SIM.alphaTarget(0);drag.fx=drag.x;drag.fy=drag.y;drag=null;pid=null;
+    }
+  });
+  canvas.addEventListener('mouseleave',()=>{if(!selNode)document.getElementById('tip').style.display='none';});
+}
+
+function selectNodeCanvas(d, e) {
+  selNode=d.id;
+  const html=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div>`
+    +`<div class="tip-row">In-degree: <span>${d.indegree}</span></div>`
+    +`<div class="tip-row">Out-degree: <span>${d.outdegree}</span></div>`
+    +`<div class="tip-row">Total: <span>${d.total}</span></div>`;
+  if (e) placeTip(e, html); else {const tip=document.getElementById('tip');tip.innerHTML=html;tip.style.display='block';}
+  document.querySelectorAll('.ap-row').forEach(r=>r.classList.toggle('hi',r.dataset.id===d.id));
+  updateSimulateBtn(); drawCanvasFrame();
+}
+
+function toggleRenderer() {
+  useCanvas=!useCanvas;
+  document.getElementById('graph-svg').style.display = useCanvas?'none':'block';
+  const c=document.getElementById('graph-canvas'); c.style.display=useCanvas?'block':'none';
+  if (useCanvas){resizeCanvas();initCanvasEvents();if(GD)drawCanvasFrame();}
+  else if(GD&&SIM){SIM.alpha(0.1).restart();}
+}
+
+// ── SEARCH ───────────────────────────────────────────────
+let searchMatchIds = null;
+
+function openSearch() {
+  const sw=document.getElementById('search-wrap'); sw.style.display='block';
+  document.getElementById('search-input').select();
+  document.getElementById('search-input').focus();
+}
+function closeSearch() {
+  document.getElementById('search-wrap').style.display='none';
+  document.getElementById('search-input').value='';
+  document.getElementById('search-count').textContent='';
+  searchMatchIds=null; applySearchHighlight();
+}
+function doSearch(q) {
+  if (!GD||!q.trim()){searchMatchIds=null;document.getElementById('search-count').textContent='';applySearchHighlight();return;}
+  const ql=q.toLowerCase();
+  const matches=GD.nodes.filter(d=>d.id.toLowerCase().includes(ql)||d.group.toLowerCase().includes(ql));
+  searchMatchIds=new Set(matches.map(d=>d.id));
+  document.getElementById('search-count').textContent=matches.length?`${matches.length}`:'0';
+  applySearchHighlight();
+  if (matches.length===1) zoomToNode(matches[0]);
+}
+function applySearchHighlight() {
+  if (useCanvas){drawCanvasFrame();return;}
+  if (!GD) return;
+  if (!searchMatchIds){
+    d3.selectAll('#graph-svg .nodes circle').attr('fill-opacity',1);
+    d3.selectAll('#graph-svg .nodes text').attr('fill-opacity',null);
+    applyEdgeOpacity(); return;
+  }
+  d3.selectAll('#graph-svg .nodes circle').attr('fill-opacity',d=>searchMatchIds.has(d.id)?1:0.1);
+  d3.selectAll('#graph-svg .nodes text').attr('fill-opacity',d=>searchMatchIds.has(d.id)?1:0.08);
+  d3.selectAll('#graph-svg .links path').attr('stroke-opacity',l=>{
+    const s=l.source.id||l.source,t=l.target.id||l.target;
+    return (searchMatchIds.has(s)||searchMatchIds.has(t))?S.edgeOpacity*0.7:0.03;
+  });
+}
+function zoomToNode(d) {
+  if (!d||d.x==null) return;
+  const wrap=document.getElementById('graph-wrap'),W=wrap.clientWidth,H=wrap.clientHeight;
+  const k=2.5, tx=W/2-k*d.x, ty=H/2-k*d.y;
+  if (useCanvas){
+    canvasT=d3.zoomIdentity.translate(tx,ty).scale(k);
+    drawCanvasFrame();
+  } else if (SVG_ZOOM&&SVG){
+    SVG.transition().duration(500).call(SVG_ZOOM.transform,d3.zoomIdentity.translate(tx,ty).scale(k));
+  }
+}
+
+// ── REMOVAL SIMULATION ───────────────────────────────────
+function updateSimulateBtn() {
+  const btn=document.getElementById('simulate-btn');
+  if (btn) btn.style.display=selNode?'block':'none';
+}
+
+function calcHealthScore(gd) {
+  const n=gd.nodes.length,e=gd.links.length,maxP=n*(n-1);
+  const den=maxP>0?(e/maxP*100):0;
+  const cross=gd.links.filter(l=>(l.source.group||l.source)!==(l.target.group||l.target)).length;
+  const crossPct=e>0?(cross/e*100):0;
+  const bots=[...gd.nodes].sort((a,b)=>b.betweenness-a.betweenness).filter(d=>d.betweenness>0.1).length;
+  const iso=gd.nodes.filter(d=>d.total<=1).length;
+  let s=0;
+  s+=Math.min(30,den>=5&&den<=50?30:den<5?den*6:30-(den-50)*0.4);
+  s+=crossPct>=30?30:crossPct>=15?15:crossPct*0.5;
+  s+=bots===0?20:bots<=2?15:bots<=4?8:0;
+  s+=iso===0?20:iso<=2?12:iso<=5?5:0;
+  return Math.round(Math.min(100,Math.max(0,s)));
+}
+
+function simulateRemoval(nodeId) {
+  if (!GD||!nodeId) return;
+  const target=GD.nodes.find(n=>n.id===nodeId); if(!target) return;
+  const beforeScore=calcHealthScore(GD);
+  const conns=GD.links.filter(l=>(l.source.id||l.source)===nodeId||(l.target.id||l.target)===nodeId).length;
+  const afterNodes=GD.nodes.filter(n=>n.id!==nodeId).map(n=>({...n}));
+  const afterLinks=GD.links.filter(l=>{const s=l.source.id||l.source,t=l.target.id||l.target;return s!==nodeId&&t!==nodeId;}).map(l=>({...l}));
+  computeMetrics(afterNodes,afterLinks);
+  const afterGD={nodes:afterNodes,links:afterLinks}, afterScore=calcHealthScore(afterGD);
+  const hadConn=new Set(GD.nodes.filter(n=>n.total>0&&n.id!==nodeId).map(n=>n.id));
+  const newIso=afterNodes.filter(n=>n.total===0&&hadConn.has(n.id));
+  const beforeBC={}; GD.nodes.forEach(n=>{beforeBC[n.id]=n.betweenness;});
+  const newBots=afterNodes.filter(n=>n.betweenness>0.05&&n.betweenness>(beforeBC[n.id]||0)*1.25)
+    .sort((a,b)=>b.betweenness-a.betweenness).slice(0,5);
+  showRemovalOverlay(target,conns,beforeScore,afterScore,newIso,newBots);
+}
+
+function showRemovalOverlay(target,conns,before,after,newIso,newBots) {
+  const d=after-before, dc=d>=0?'#10b981':d>=-10?'#f59e0b':'#ef4444', ds=d>=0?'+':'';
+  const ratingPill=d>=-5?'pill-green':d>=-15?'pill-amber':'pill-red';
+  const html=`
+<div class="hc-top">
+  <div class="hc-title">If ${target.id} left…</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="hc-score-wrap">
+      <div class="hc-score" style="color:${dc}">${ds}${d}</div>
+      <div class="hc-score-lbl">Health<br>change</div>
+    </div>
+    <button class="btn btn-ghost" id="close-removal" style="padding:4px 9px;font-size:11px">✕</button>
+  </div>
+</div>
+<div class="hc-section">
+  <div class="hc-section-title">Overview</div>
+  <div class="hc-metric">
+    <div class="hc-pill ${ratingPill}">${before} → ${after}</div>
+    <div class="hc-metric-body">
+      <div class="hc-metric-name">Network Health Score</div>
+      <div class="hc-metric-val">${Math.abs(d)} point ${d<=0?'drop':'gain'}</div>
+      <div class="hc-metric-desc">${d<=-15?`Significant impact — ${target.id} is a critical network asset.`:d<=-5?`Moderate impact — the network would weaken but recover over time.`:`The network is resilient here — ${target.id} is not a single point of failure.`}</div>
+    </div>
+  </div>
+  <div class="hc-metric">
+    <div class="hc-pill pill-amber">Direct</div>
+    <div class="hc-metric-body">
+      <div class="hc-metric-name">Connections removed</div>
+      <div class="hc-metric-val">${conns} relationship${conns!==1?'s':''} would disappear</div>
+      <div class="hc-metric-desc">Anyone who communicated exclusively through ${target.id} would need to find new paths.</div>
+    </div>
+  </div>
+</div>
+${newIso.length?`<div class="hc-section"><div class="hc-section-title">Newly Isolated</div>
+  <div class="hc-metric"><div class="hc-pill pill-red">Risk</div><div class="hc-metric-body">
+    <div class="hc-metric-name">${newIso.length} person${newIso.length!==1?'s':''} would lose all connections</div>
+    <div class="hc-metric-desc">These people had no other routes into the network.</div>
+    <div class="hc-people">${newIso.map(n=>`<div class="hc-tag">${n.id}</div>`).join('')}</div>
+  </div></div></div>`:''}
+${newBots.length?`<div class="hc-section"><div class="hc-section-title">New Pressure Points</div>
+  <div class="hc-metric"><div class="hc-pill pill-amber">Watch</div><div class="hc-metric-body">
+    <div class="hc-metric-name">These people absorb more bridging responsibility</div>
+    <div class="hc-metric-desc">Without ${target.id}, they would carry more of the network's cross-team load.</div>
+    <div class="hc-people">${newBots.map(n=>`<div class="hc-tag">${n.id}</div>`).join('')}</div>
+  </div></div></div>`:''}`;
+  let ov=document.getElementById('removal-overlay');
+  if(!ov){ov=document.createElement('div');ov.id='removal-overlay';ov.className='health-overlay';
+    ov.innerHTML=`<div class="health-card" id="removal-card"></div>`;
+    document.getElementById('graph-wrap').appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});}
+  document.getElementById('removal-card').innerHTML=html;
+  document.getElementById('close-removal').addEventListener('click',()=>ov.remove());
+}
+
 function placeTip(e, html) {
   const tip = document.getElementById('tip');
   tip.innerHTML = html;
@@ -1473,6 +1802,8 @@ function renderGraph(data, keepPos){
   colorScale=d3.scaleOrdinal(COLORS).domain([...new Set(data.nodes.map(d=>d.group))]);
 
   const svgEl=document.getElementById('graph-svg');
+  svgEl.style.display = useCanvas ? 'none' : 'block';
+  document.getElementById('graph-canvas').style.display = useCanvas ? 'block' : 'none';
   const svg=d3.select(svgEl); svg.selectAll('*').remove(); SVG=svg;
 
   const defs=svg.append('defs');
@@ -1484,9 +1815,11 @@ function renderGraph(data, keepPos){
 
   const zoom=d3.zoom().scaleExtent([0.05,8]).on('zoom',e=>ZG.attr('transform',e.transform));
   svg.call(zoom);
+  SVG_ZOOM=zoom;
   ZG=svg.append('g');
 
   const hullG=ZG.append('g').attr('class','hulls');
+  HULL_G_REF=hullG;
   const linkG=ZG.append('g').attr('class','links');
   const nodeG=ZG.append('g').attr('class','nodes');
 
@@ -1508,7 +1841,9 @@ function renderGraph(data, keepPos){
   const wMin=Math.min(...weights),wMax=Math.max(...weights)||1;
   const edgeT=w=>(w-wMin)/(wMax-wMin||1);
 
-  const link=linkG.selectAll('path').data(data.links).join('path')
+  const link=linkG.selectAll('path').data(data.links).join('path');
+  LINK_SEL=link;
+  link
     .attr('fill','none')
     .attr('stroke',d=>getEdgeColor(d))
     .attr('stroke-width',d=>1.5+edgeT(d.weight)*5)
@@ -1527,6 +1862,7 @@ function renderGraph(data, keepPos){
     .on('end',(e,d)=>{if(!e.active)SIM.alphaTarget(0);d.fx=e.x;d.fy=e.y;});
 
   const node=nodeG.selectAll('g').data(data.nodes).join('g').call(drag).style('cursor','pointer');
+  NODE_SEL=node;
   node.append('circle').attr('r',d=>nodeR(d)).attr('fill',d=>getNodeColor(d)).attr('stroke','#fff').attr('stroke-width',2);
   node.append('text').text(d=>d.id.length>20?d.id.slice(0,19)+'…':d.id)
     .attr('text-anchor','middle').attr('dy',d=>nodeR(d)+13)
@@ -1562,6 +1898,7 @@ function renderGraph(data, keepPos){
     .force('y',d3.forceY(H/2).strength(S.gravity))
     .force('collide',d3.forceCollide().radius(d=>nodeR(d)+14))
     .on('tick',()=>{
+      if(useCanvas){drawCanvasFrame();return;}
       link.attr('d',linkPath);
       node.attr('transform',d=>`translate(${d.x},${d.y})`);
       if(showComm) drawHulls(hullG);
@@ -1578,21 +1915,29 @@ function renderGraph(data, keepPos){
   document.getElementById('toolbar').style.display='flex';
   document.getElementById('empty-state').style.display='none';
   document.getElementById('input-section').style.display='none';
+  const kbh=document.getElementById('kb-hint');
+  kbh.style.display='block';
+  setTimeout(()=>{kbh.style.opacity='0';kbh.style.transition='opacity 1.5s';setTimeout(()=>{kbh.style.display='none';kbh.style.opacity='';kbh.style.transition='';},1500);},4000);
+  if (useCanvas) { resizeCanvas(); initCanvasEvents(); drawCanvasFrame(); }
 }
 
 function selectNode(d, nodeSel, linkSel, e){
   selNode = d.id;
+  updateSimulateBtn();
   const html=`<div class="tip-title">${d.id}</div><div class="tip-row">Group: <span>${d.group}</span></div><div class="tip-row">In-degree: <span>${d.indegree}</span></div><div class="tip-row">Out-degree: <span>${d.outdegree}</span></div><div class="tip-row">Total: <span>${d.total}</span></div>`;
   if (e) placeTip(e, html);
   else { const tip=document.getElementById('tip'); tip.innerHTML=html; tip.style.display='block'; }
-  nodeSel.select('circle')
-    .attr('fill',n=>n.id===d.id?colorScale(n.group):'#3a3d50')
-    .attr('fill-opacity',n=>n.id===d.id?1:0.35);
-  nodeSel.select('text').attr('fill',n=>n.id===d.id?'#e8eaf0':'#5a5d78');
-  linkSel.attr('stroke-opacity',l=>{
-    const s=l.source.id||l.source, t=l.target.id||l.target;
-    return (s===d.id||t===d.id)?0.9:0.05;
-  });
+  if (useCanvas) { drawCanvasFrame(); }
+  else if (nodeSel && linkSel) {
+    nodeSel.select('circle')
+      .attr('fill',n=>n.id===d.id?colorScale(n.group):'#3a3d50')
+      .attr('fill-opacity',n=>n.id===d.id?1:0.35);
+    nodeSel.select('text').attr('fill',n=>n.id===d.id?'#e8eaf0':'#5a5d78');
+    linkSel.attr('stroke-opacity',l=>{
+      const s=l.source.id||l.source, t=l.target.id||l.target;
+      return (s===d.id||t===d.id)?0.9:0.05;
+    });
+  }
   // highlight in analysis panel
   document.querySelectorAll('.ap-row').forEach(r=>{
     r.classList.toggle('hi', r.dataset.id===d.id);
@@ -1601,12 +1946,16 @@ function selectNode(d, nodeSel, linkSel, e){
 
 function clearSelection(nodeSel, linkSel){
   selNode=null;
+  updateSimulateBtn();
   document.getElementById('tip').style.display='none';
-  const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
-  const edgeT=w=>(w-wMin)/(wMax-wMin||1);
-  nodeSel.select('circle').attr('fill',d=>getNodeColor(d)).attr('fill-opacity',1);
-  nodeSel.select('text').attr('fill', curTheme==='light'?'#1e2230':'#e8eaf0');
-  linkSel.attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65);
+  if (useCanvas) { drawCanvasFrame(); }
+  else if (nodeSel && linkSel) {
+    const weights=GD.links.map(l=>l.weight), wMin=Math.min(...weights), wMax=Math.max(...weights)||1;
+    const edgeT=w=>(w-wMin)/(wMax-wMin||1);
+    nodeSel.select('circle').attr('fill',d=>getNodeColor(d)).attr('fill-opacity',1);
+    nodeSel.select('text').attr('fill', curTheme==='light'?'#1e2230':'#e8eaf0');
+    linkSel.attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65);
+  }
   document.querySelectorAll('.ap-row').forEach(r=>r.classList.remove('hi'));
 }
 
@@ -1719,6 +2068,7 @@ function renderSummary(){
 }
 
 function highlightFromPanel(d){
+  if (useCanvas) { selectNode(d, null, null); zoomToNode(d); return; }
   const nodeSel=d3.selectAll('#graph-svg .nodes g');
   const linkSel=d3.selectAll('#graph-svg .links path');
   selectNode(d, nodeSel, linkSel);
@@ -1938,7 +2288,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // fit button
   document.getElementById('fit-btn').addEventListener('click',()=>{
-    document.getElementById('graph-svg').dispatchEvent(new Event('_fitview'));
+    if (useCanvas && GD) {
+      const wrap=document.getElementById('graph-wrap');
+      const W=wrap.clientWidth, H=wrap.clientHeight;
+      const xs=GD.nodes.map(d=>d.x), ys=GD.nodes.map(d=>d.y);
+      const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+      const bw=x1-x0||1, bh=y1-y0||1;
+      const k=Math.min(0.9*W/bw, 0.9*H/bh, 2);
+      const tx=W/2-k*(x0+bw/2), ty=H/2-k*(y0+bh/2);
+      canvasT=d3.zoomIdentity.translate(tx,ty).scale(k);
+      drawCanvasFrame();
+    } else {
+      document.getElementById('graph-svg').dispatchEvent(new Event('_fitview'));
+    }
   });
 
   // detect groups button
@@ -1949,15 +2311,16 @@ document.addEventListener('DOMContentLoaded',()=>{
     const btn=document.getElementById('detect-btn');
     btn.className=showComm?'btn btn-on':'btn btn-ghost';
     btn.textContent=showComm?'◉ Hide Groups':'◉ Detect Groups';
-    // recolour nodes by community / restore group colour
-    d3.selectAll('#graph-svg .nodes circle').attr('fill',d=>{
-      if(showComm) return COMM_COLORS[communities[GD.nodes.indexOf(d)]%COMM_COLORS.length];
-      return colorScale(d.group);
-    });
-    // redraw hulls (or clear)
-    const hullG=d3.select('#graph-svg .hulls');
-    if(!showComm){ hullG.selectAll('*').remove(); }
-    else if(SIM) SIM.alpha(0.01).restart();
+    if (useCanvas) { drawCanvasFrame(); if(showComm&&SIM) SIM.alpha(0.01).restart(); }
+    else {
+      d3.selectAll('#graph-svg .nodes circle').attr('fill',d=>{
+        if(showComm) return COMM_COLORS[communities[GD.nodes.indexOf(d)]%COMM_COLORS.length];
+        return colorScale(d.group);
+      });
+      const hullG=d3.select('#graph-svg .hulls');
+      if(!showComm){ hullG.selectAll('*').remove(); }
+      else if(SIM) SIM.alpha(0.01).restart();
+    }
   });
 
   // health button
@@ -2053,7 +2416,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       renderGraph(filtered);
       applyEdgeOpacity(); applyLabels(); applyArrows();
       document.getElementById('loader').style.display='none';
-      setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')),800);
+      setTimeout(()=>document.getElementById('fit-btn').click(),800);
     },30);
   });
 
@@ -2105,7 +2468,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         renderGraph(filtered);
       }
     }
-    setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')), 600);
+    setTimeout(()=>document.getElementById('fit-btn').click(), 600);
   });
 
   // Reset settings
@@ -2128,6 +2491,49 @@ document.addEventListener('DOMContentLoaded',()=>{
       document.getElementById('sv-maxn').textContent='All'; }
     Object.assign(S, DEFAULTS, {excludeGroups:new Set()});
     if(GD){ applyColour(); applyEdgeOpacity(); applyLabels(); applyArrows(); }
+  });
+
+  // Canvas renderer toggle
+  document.getElementById('tgl-canvas').addEventListener('change', () => toggleRenderer());
+
+  // Search
+  document.getElementById('search-btn').addEventListener('click', () => openSearch());
+  document.getElementById('search-close-btn').addEventListener('click', () => closeSearch());
+  document.getElementById('search-input').addEventListener('input', e => doSearch(e.target.value));
+  document.getElementById('search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      if (searchMatchIds && searchMatchIds.size > 0) {
+        const first = GD.nodes.find(d => searchMatchIds.has(d.id));
+        if (first) zoomToNode(first);
+      }
+    } else if (e.key === 'Escape') { closeSearch(); }
+  });
+
+  // Simulate removal button
+  document.getElementById('simulate-btn').addEventListener('click', () => {
+    if (selNode) simulateRemoval(selNode);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'f' || e.key === 'F') { document.getElementById('fit-btn').click(); }
+    else if (e.key === '/') { e.preventDefault(); openSearch(); }
+    else if (e.key === 'Escape') {
+      if (document.getElementById('search-wrap').style.display !== 'none') { closeSearch(); }
+      else if (GD) {
+        if (useCanvas) clearSelection(null, null);
+        else clearSelection(NODE_SEL, LINK_SEL);
+      }
+    }
+    else if (e.key === 'g' || e.key === 'G') { document.getElementById('groupview-btn').click(); }
+    else if (e.key === 'h' || e.key === 'H') { document.getElementById('health-btn').click(); }
+    else if (e.key === 'a' || e.key === 'A') { document.getElementById('analyze-btn').click(); }
+  });
+
+  // Window resize — keep canvas sized
+  window.addEventListener('resize', () => {
+    if (useCanvas && GD) { resizeCanvas(); drawCanvasFrame(); }
   });
 });
 
