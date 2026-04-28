@@ -636,58 +636,58 @@ const METRIC = {
   closeness:   { label:'Fastest Communicators', desc:'How quickly this person can reach everyone else in the network, on average. A high score means they are centrally placed — news, decisions, or changes that start with them spread to the whole organisation faster than from anyone else.' }
 };
 const SAMPLE = `source_node,destination_node,edge_weight,source_group,destination_group
-Sarah,James,9,Leadership,Leadership
-Sarah,Jordan,7,Leadership,Product
-Sarah,Chris,6,Leadership,Marketing
-Sarah,Taylor,6,Leadership,Sales
-Sarah,Maya,5,Leadership,Engineering
-James,Maya,9,Leadership,Engineering
-James,Tom,7,Leadership,Engineering
-James,Jordan,6,Leadership,Product
-Maya,Tom,8,Engineering,Engineering
-Maya,Alex,6,Engineering,Engineering
-Maya,Carlos,5,Engineering,Engineering
-Maya,Priya,7,Engineering,Engineering
-Maya,Jordan,8,Engineering,Product
-Tom,Maya,4,Engineering,Engineering
-Tom,Taylor,7,Engineering,Sales
-Tom,Blake,5,Engineering,Sales
-Alex,Maya,8,Engineering,Engineering
-Alex,Lisa,5,Engineering,Engineering
-Lisa,Alex,4,Engineering,Engineering
-Lisa,Maya,6,Engineering,Engineering
-Carlos,Maya,4,Engineering,Engineering
-Carlos,Chris,7,Engineering,Marketing
-Carlos,Dana,5,Engineering,Marketing
-Priya,Maya,5,Engineering,Engineering
-Priya,Jordan,4,Engineering,Product
-Jordan,Maya,5,Product,Engineering
-Jordan,Pat,7,Product,Product
-Jordan,Sam,6,Product,Product
-Jordan,Kim,5,Product,Product
-Jordan,Chris,8,Product,Marketing
-Jordan,Taylor,6,Product,Sales
-Pat,Jordan,4,Product,Product
-Pat,Chris,8,Product,Marketing
-Pat,Dana,6,Product,Marketing
-Sam,Jordan,5,Product,Product
-Kim,Jordan,4,Product,Product
-Chris,Dana,8,Marketing,Marketing
-Chris,Riley,6,Marketing,Marketing
-Chris,Morgan,5,Marketing,Marketing
-Dana,Chris,5,Marketing,Marketing
-Dana,Riley,6,Marketing,Marketing
-Dana,Taylor,7,Marketing,Sales
-Riley,Chris,7,Marketing,Marketing
-Morgan,Chris,6,Marketing,Marketing
-Taylor,Casey,7,Sales,Sales
-Taylor,Quinn,6,Sales,Sales
-Taylor,Blake,5,Sales,Sales
-Blake,Taylor,4,Sales,Sales
-Blake,Casey,6,Sales,Sales
-Casey,Taylor,7,Sales,Sales
-Casey,Quinn,5,Sales,Sales
-Quinn,Taylor,6,Sales,Sales`;
+Sarah Mitchell,James Okonkwo,9,Leadership,Leadership
+Sarah Mitchell,Jordan Lee,7,Leadership,Product
+Sarah Mitchell,Chris Patel,6,Leadership,Marketing
+Sarah Mitchell,Taylor Brooks,6,Leadership,Sales
+Sarah Mitchell,Maya Gupta,5,Leadership,Engineering
+James Okonkwo,Maya Gupta,9,Leadership,Engineering
+James Okonkwo,Tom Harrison,7,Leadership,Engineering
+James Okonkwo,Jordan Lee,6,Leadership,Product
+Maya Gupta,Tom Harrison,8,Engineering,Engineering
+Maya Gupta,Alex Novak,6,Engineering,Engineering
+Maya Gupta,Carlos Mendez,5,Engineering,Engineering
+Maya Gupta,Priya Nair,7,Engineering,Engineering
+Maya Gupta,Jordan Lee,8,Engineering,Product
+Tom Harrison,Maya Gupta,4,Engineering,Engineering
+Tom Harrison,Taylor Brooks,7,Engineering,Sales
+Tom Harrison,Blake Evans,5,Engineering,Sales
+Alex Novak,Maya Gupta,8,Engineering,Engineering
+Alex Novak,Lisa Chen,5,Engineering,Engineering
+Lisa Chen,Alex Novak,4,Engineering,Engineering
+Lisa Chen,Maya Gupta,6,Engineering,Engineering
+Carlos Mendez,Maya Gupta,4,Engineering,Engineering
+Carlos Mendez,Chris Patel,7,Engineering,Marketing
+Carlos Mendez,Dana Torres,5,Engineering,Marketing
+Priya Nair,Maya Gupta,5,Engineering,Engineering
+Priya Nair,Jordan Lee,4,Engineering,Product
+Jordan Lee,Maya Gupta,5,Product,Engineering
+Jordan Lee,Pat Sullivan,7,Product,Product
+Jordan Lee,Sam Okafor,6,Product,Product
+Jordan Lee,Kim Park,5,Product,Product
+Jordan Lee,Chris Patel,8,Product,Marketing
+Jordan Lee,Taylor Brooks,6,Product,Sales
+Pat Sullivan,Jordan Lee,4,Product,Product
+Pat Sullivan,Chris Patel,8,Product,Marketing
+Pat Sullivan,Dana Torres,6,Product,Marketing
+Sam Okafor,Jordan Lee,5,Product,Product
+Kim Park,Jordan Lee,4,Product,Product
+Chris Patel,Dana Torres,8,Marketing,Marketing
+Chris Patel,Riley Walsh,6,Marketing,Marketing
+Chris Patel,Morgan Reyes,5,Marketing,Marketing
+Dana Torres,Chris Patel,5,Marketing,Marketing
+Dana Torres,Riley Walsh,6,Marketing,Marketing
+Dana Torres,Taylor Brooks,7,Marketing,Sales
+Riley Walsh,Chris Patel,7,Marketing,Marketing
+Morgan Reyes,Chris Patel,6,Marketing,Marketing
+Taylor Brooks,Casey Williams,7,Sales,Sales
+Taylor Brooks,Quinn Foster,6,Sales,Sales
+Taylor Brooks,Blake Evans,5,Sales,Sales
+Blake Evans,Taylor Brooks,4,Sales,Sales
+Blake Evans,Casey Williams,6,Sales,Sales
+Casey Williams,Taylor Brooks,7,Sales,Sales
+Casey Williams,Quinn Foster,5,Sales,Sales
+Quinn Foster,Taylor Brooks,6,Sales,Sales`;
 
 const SAMPLE_LARGE = `source_node,destination_node,edge_weight,source_group,destination_group
 Elena Rodriguez,Marcus Chen,9,Leadership,Leadership
@@ -1523,8 +1523,11 @@ const CANVAS_BG = { dark:'#0a0d14', light:'#f0f4f9', corporate:'#070f1c', neon:'
 
 function resizeCanvas() {
   const c = document.getElementById('graph-canvas');
-  const w = document.getElementById('graph-wrap');
-  c.width = w.clientWidth; c.height = w.clientHeight;
+  const wrap = document.getElementById('graph-wrap');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = wrap.clientWidth, cssH = wrap.clientHeight;
+  c.width = cssW * dpr; c.height = cssH * dpr;
+  c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
 }
 
 function canvasArrow(ctx, x1, y1, x2, y2) {
@@ -1543,7 +1546,10 @@ function drawCanvasFrame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = CANVAS_BG[curTheme] || '#0a0d14';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.save(); ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
+  ctx.save();
+  const dpr = window.devicePixelRatio || 1;
+  ctx.scale(dpr, dpr);
+  ctx.translate(t.x, t.y); ctx.scale(t.k, t.k);
 
   const weights = GD.links.map(l=>l.weight);
   const wMn = Math.min(...weights)||0, wMx = Math.max(...weights)||1;
@@ -2655,10 +2661,14 @@ document.addEventListener('DOMContentLoaded',()=>{
       if (!GD) return;
       if (useCanvas) {
         const c = document.getElementById('graph-canvas');
-        const oldW = c.width, oldH = c.height;
+        // measure old CSS size before resizeCanvas overwrites style
+        const oldW = parseFloat(c.style.width) || c.clientWidth;
+        const oldH = parseFloat(c.style.height) || c.clientHeight;
         resizeCanvas();
-        // shift the transform so the same graph centre stays centred
-        const dx = (c.width - oldW) / 2, dy = (c.height - oldH) / 2;
+        const newW = parseFloat(c.style.width);
+        const newH = parseFloat(c.style.height);
+        // shift transform in CSS pixels so the same graph centre stays centred
+        const dx = (newW - oldW) / 2, dy = (newH - oldH) / 2;
         canvasT = d3.zoomIdentity.translate(canvasT.x + dx, canvasT.y + dy).scale(canvasT.k);
         drawCanvasFrame();
       }
