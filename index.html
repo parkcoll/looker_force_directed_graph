@@ -433,7 +433,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
     </div>
   </div>
   <div class="input-actions">
-    <div class="hint">Columns: <code>source_node</code> <code>destination_node</code> <code>edge_weight</code> <code>source_group</code> <code>destination_group</code> — headers auto-detected, weight optional</div>
+    <div class="hint">Required: <code>source_node</code> <code>destination_node</code> <code>source_group</code> <code>destination_group</code> — Optional: <code>edge_weight</code> <code>source_level</code> <code>destination_level</code> (1=junior, higher=senior, used by Hidden Talent)</div>
   </div>
   <div style="margin-top:10px;background:#10b98111;border:1px solid #10b98133;border-radius:6px;padding:8px 12px;display:flex;align-items:flex-start;gap:8px">
     <span style="font-size:14px;flex-shrink:0">🔒</span>
@@ -660,6 +660,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
           <div class="tab" data-m="closeness">Reach</div>
           <div class="tab" data-m="silos" style="border-color:#ef444444;color:#ef4444">Silos</div>
           <div class="tab" data-m="changeAgent" style="border-color:#10b98144;color:#10b981">Change Agents</div>
+          <div class="tab" data-m="hiddenTalent" style="border-color:#f59e0b44;color:#f59e0b">Hidden Talent</div>
         </div>
         <div class="ap-desc" id="ap-desc"></div>
       </div>
@@ -685,61 +686,62 @@ const METRIC = {
   betweenness: { label:'Key Connectors', desc:'How often this person sits on the path between two others who need to talk. Think of them as the bridges in your organisation — remove them and some teams lose their only route to each other. Often invisible on org charts.' },
   total:       { label:'Top Networkers', desc:'Total connections in and out combined. These are the social hubs — people who simply know the most people. Useful for spreading messages quickly or onboarding new hires.' },
   closeness:   { label:'Fastest Communicators', desc:'How quickly this person can reach everyone else in the network, on average. A high score means they are centrally placed — news, decisions, or changes that start with them spread to the whole organisation faster than from anyone else.' },
-  changeAgent: { label:'Change Agents', desc:'People best positioned to drive organisational change — ranked by a composite of cross-team reach (35%), bridge position (30%), network closeness (20%), and active outreach (15%). Unlike bottlenecks, high scorers span multiple groups without being single points of failure.' }
+  changeAgent:   { label:'Change Agents', desc:'People best positioned to drive organisational change — ranked by a composite of cross-team reach (35%), bridge position (30%), network closeness (20%), and active outreach (15%). Unlike bottlenecks, high scorers span multiple groups without being single points of failure.' },
+  hiddenTalent:  { label:'Hidden Talent', desc:'People who are highly sought-after relative to their seniority — in-demand (45%), cross-team demand (35%), and junior position (20%). Add optional source_level / destination_level columns (1=junior, higher=senior) for precise seniority scoring; otherwise the tool infers hierarchy from network behaviour.' }
 };
-const SAMPLE = `source_node,destination_node,edge_weight,source_group,destination_group
-Sarah Mitchell,James Okonkwo,9,Leadership,Leadership
-Sarah Mitchell,Jordan Lee,7,Leadership,Product
-Sarah Mitchell,Chris Patel,6,Leadership,Marketing
-Sarah Mitchell,Taylor Brooks,6,Leadership,Sales
-Sarah Mitchell,Maya Gupta,5,Leadership,Engineering
-James Okonkwo,Maya Gupta,9,Leadership,Engineering
-James Okonkwo,Tom Harrison,7,Leadership,Engineering
-James Okonkwo,Jordan Lee,6,Leadership,Product
-Maya Gupta,Tom Harrison,8,Engineering,Engineering
-Maya Gupta,Alex Novak,6,Engineering,Engineering
-Maya Gupta,Carlos Mendez,5,Engineering,Engineering
-Maya Gupta,Priya Nair,7,Engineering,Engineering
-Maya Gupta,Jordan Lee,8,Engineering,Product
-Tom Harrison,Maya Gupta,4,Engineering,Engineering
-Tom Harrison,Taylor Brooks,7,Engineering,Sales
-Tom Harrison,Blake Evans,5,Engineering,Sales
-Alex Novak,Maya Gupta,8,Engineering,Engineering
-Alex Novak,Lisa Chen,5,Engineering,Engineering
-Lisa Chen,Alex Novak,4,Engineering,Engineering
-Lisa Chen,Maya Gupta,6,Engineering,Engineering
-Carlos Mendez,Maya Gupta,4,Engineering,Engineering
-Carlos Mendez,Chris Patel,7,Engineering,Marketing
-Carlos Mendez,Dana Torres,5,Engineering,Marketing
-Priya Nair,Maya Gupta,5,Engineering,Engineering
-Priya Nair,Jordan Lee,4,Engineering,Product
-Jordan Lee,Maya Gupta,5,Product,Engineering
-Jordan Lee,Pat Sullivan,7,Product,Product
-Jordan Lee,Sam Okafor,6,Product,Product
-Jordan Lee,Kim Park,5,Product,Product
-Jordan Lee,Chris Patel,8,Product,Marketing
-Jordan Lee,Taylor Brooks,6,Product,Sales
-Pat Sullivan,Jordan Lee,4,Product,Product
-Pat Sullivan,Chris Patel,8,Product,Marketing
-Pat Sullivan,Dana Torres,6,Product,Marketing
-Sam Okafor,Jordan Lee,5,Product,Product
-Kim Park,Jordan Lee,4,Product,Product
-Chris Patel,Dana Torres,8,Marketing,Marketing
-Chris Patel,Riley Walsh,6,Marketing,Marketing
-Chris Patel,Morgan Reyes,5,Marketing,Marketing
-Dana Torres,Chris Patel,5,Marketing,Marketing
-Dana Torres,Riley Walsh,6,Marketing,Marketing
-Dana Torres,Taylor Brooks,7,Marketing,Sales
-Riley Walsh,Chris Patel,7,Marketing,Marketing
-Morgan Reyes,Chris Patel,6,Marketing,Marketing
-Taylor Brooks,Casey Williams,7,Sales,Sales
-Taylor Brooks,Quinn Foster,6,Sales,Sales
-Taylor Brooks,Blake Evans,5,Sales,Sales
-Blake Evans,Taylor Brooks,4,Sales,Sales
-Blake Evans,Casey Williams,6,Sales,Sales
-Casey Williams,Taylor Brooks,7,Sales,Sales
-Casey Williams,Quinn Foster,5,Sales,Sales
-Quinn Foster,Taylor Brooks,6,Sales,Sales`;
+const SAMPLE = `source_node,destination_node,edge_weight,source_group,destination_group,source_level,destination_level
+Sarah Mitchell,James Okonkwo,9,Leadership,Leadership,5,4
+Sarah Mitchell,Jordan Lee,7,Leadership,Product,5,3
+Sarah Mitchell,Chris Patel,6,Leadership,Marketing,5,3
+Sarah Mitchell,Taylor Brooks,6,Leadership,Sales,5,3
+Sarah Mitchell,Maya Gupta,5,Leadership,Engineering,5,4
+James Okonkwo,Maya Gupta,9,Leadership,Engineering,4,4
+James Okonkwo,Tom Harrison,7,Leadership,Engineering,4,3
+James Okonkwo,Jordan Lee,6,Leadership,Product,4,3
+Maya Gupta,Tom Harrison,8,Engineering,Engineering,4,3
+Maya Gupta,Alex Novak,6,Engineering,Engineering,4,2
+Maya Gupta,Carlos Mendez,5,Engineering,Engineering,4,2
+Maya Gupta,Priya Nair,7,Engineering,Engineering,4,2
+Maya Gupta,Jordan Lee,8,Engineering,Product,4,3
+Tom Harrison,Maya Gupta,4,Engineering,Engineering,3,4
+Tom Harrison,Taylor Brooks,7,Engineering,Sales,3,3
+Tom Harrison,Blake Evans,5,Engineering,Sales,3,2
+Alex Novak,Maya Gupta,8,Engineering,Engineering,2,4
+Alex Novak,Lisa Chen,5,Engineering,Engineering,2,1
+Lisa Chen,Alex Novak,4,Engineering,Engineering,1,2
+Lisa Chen,Maya Gupta,6,Engineering,Engineering,1,4
+Carlos Mendez,Maya Gupta,4,Engineering,Engineering,2,4
+Carlos Mendez,Chris Patel,7,Engineering,Marketing,2,3
+Carlos Mendez,Dana Torres,5,Engineering,Marketing,2,2
+Priya Nair,Maya Gupta,5,Engineering,Engineering,2,4
+Priya Nair,Jordan Lee,4,Engineering,Product,2,3
+Jordan Lee,Maya Gupta,5,Product,Engineering,3,4
+Jordan Lee,Pat Sullivan,7,Product,Product,3,2
+Jordan Lee,Sam Okafor,6,Product,Product,3,1
+Jordan Lee,Kim Park,5,Product,Product,3,1
+Jordan Lee,Chris Patel,8,Product,Marketing,3,3
+Jordan Lee,Taylor Brooks,6,Product,Sales,3,3
+Pat Sullivan,Jordan Lee,4,Product,Product,2,3
+Pat Sullivan,Chris Patel,8,Product,Marketing,2,3
+Pat Sullivan,Dana Torres,6,Product,Marketing,2,2
+Sam Okafor,Jordan Lee,5,Product,Product,1,3
+Kim Park,Jordan Lee,4,Product,Product,1,3
+Chris Patel,Dana Torres,8,Marketing,Marketing,3,2
+Chris Patel,Riley Walsh,6,Marketing,Marketing,3,1
+Chris Patel,Morgan Reyes,5,Marketing,Marketing,3,1
+Dana Torres,Chris Patel,5,Marketing,Marketing,2,3
+Dana Torres,Riley Walsh,6,Marketing,Marketing,2,1
+Dana Torres,Taylor Brooks,7,Marketing,Sales,2,3
+Riley Walsh,Chris Patel,7,Marketing,Marketing,1,3
+Morgan Reyes,Chris Patel,6,Marketing,Marketing,1,3
+Taylor Brooks,Casey Williams,7,Sales,Sales,3,1
+Taylor Brooks,Quinn Foster,6,Sales,Sales,3,1
+Taylor Brooks,Blake Evans,5,Sales,Sales,3,2
+Blake Evans,Taylor Brooks,4,Sales,Sales,2,3
+Blake Evans,Casey Williams,6,Sales,Sales,2,1
+Casey Williams,Taylor Brooks,7,Sales,Sales,1,3
+Casey Williams,Quinn Foster,5,Sales,Sales,1,1
+Quinn Foster,Taylor Brooks,6,Sales,Sales,1,3`;
 
 const SAMPLE_LARGE = `source_node,destination_node,edge_weight,source_group,destination_group
 Elena Rodriguez,Marcus Chen,9,Leadership,Leadership
@@ -1192,7 +1194,9 @@ function parseCSV(raw) {
       src, dst,
       weight: col.w >= 0 ? (parseFloat(vals[col.w]) || 1) : 1,
       srcGrp: col.sg >= 0 ? (vals[col.sg] || 'Default') : 'Default',
-      dstGrp: col.dg >= 0 ? (vals[col.dg] || 'Default') : 'Default'
+      dstGrp: col.dg >= 0 ? (vals[col.dg] || 'Default') : 'Default',
+      srcLvl: col.sl >= 0 ? parseFloat(vals[col.sl]) || null : null,
+      dstLvl: col.dl >= 0 ? parseFloat(vals[col.dl]) || null : null
     });
   }
   if (!rows.length) throw new Error('No valid rows found. Check column names.');
@@ -1206,15 +1210,20 @@ function detectCols(h) {
     dst: find('destination_node','destination','target','dest','to','recipient','person_b','employee_b'),
     w:   find('edge_weight','weight','value','strength','count','frequency'),
     sg:  find('source_group','src_group','from_group','group_a','team_a','dept_a','department_a','sourcegroup'),
-    dg:  find('destination_group','dest_group','target_group','group_b','team_b','dept_b','department_b','destgroup')
+    dg:  find('destination_group','dest_group','target_group','group_b','team_b','dept_b','department_b','destgroup'),
+    sl:  find('source_level','src_level','level_a','from_level','level_from','seniority_a'),
+    dl:  find('destination_level','dest_level','level_b','to_level','level_to','seniority_b')
   };
 }
 
 function buildGraph(rows) {
   const nodeMap = new Map(), linkAgg = new Map();
-  const addNode = (id, grp) => { if (!nodeMap.has(id)) nodeMap.set(id, { id, group: grp }); };
+  const addNode = (id, grp, lvl) => {
+    if (!nodeMap.has(id)) nodeMap.set(id, { id, group: grp, level: lvl });
+    else if (lvl != null && nodeMap.get(id).level == null) nodeMap.get(id).level = lvl;
+  };
   rows.forEach(r => {
-    addNode(r.src, r.srcGrp); addNode(r.dst, r.dstGrp);
+    addNode(r.src, r.srcGrp, r.srcLvl); addNode(r.dst, r.dstGrp, r.dstLvl);
     const key = r.src + '\x00' + r.dst;
     linkAgg.set(key, (linkAgg.get(key) || 0) + r.weight);
   });
@@ -1244,6 +1253,31 @@ function computeMetrics(nodes, links) {
   nodes.forEach((d,i) => {
     d.indegree = ind[i]; d.outdegree = outd[i];
     d.total = ind[i] + outd[i]; d.betweenness = bc[i]; d.closeness = clos[i];
+  });
+
+  // Hidden talent score
+  const crossInd = new Array(n).fill(0);
+  links.forEach(l => {
+    const s=idx.get(l.source.id||l.source), t=idx.get(l.target.id||l.target);
+    if (s!=null&&t!=null&&nodes[s].group!==nodes[t].group) crossInd[t]++;
+  });
+  const hasLevel = nodes.some(d => d.level != null);
+  const maxLevel = hasLevel ? Math.max(...nodes.map(d=>d.level||1)) : 1;
+  const minLevel = hasLevel ? Math.min(...nodes.map(d=>d.level||maxLevel)) : 1;
+  const lvlRange = maxLevel - minLevel || 1;
+  const normArr = arr => { const mx=Math.max(...arr)||1; return arr.map(v=>v/mx); };
+  const inN = normArr(ind);
+  nodes.forEach((d,i) => {
+    if (ind[i] === 0) { d.hiddenTalent=0; d.htInDemand=0; d.htCrossTeam=0; d.htJunior=0; d.htHasLevel=hasLevel; return; }
+    const crossRatio = crossInd[i] / ind[i];
+    const juniorScore = hasLevel
+      ? 1 - ((d.level||minLevel) - minLevel) / lvlRange   // 1=most junior
+      : d.total>0 ? Math.max(0, 1 - d.outdegree/d.total) : 0.5; // low out-directiveness proxy
+    d.htInDemand  = Math.round(inN[i]*100);
+    d.htCrossTeam = Math.round(crossRatio*100);
+    d.htJunior    = Math.round(juniorScore*100);
+    d.htHasLevel  = hasLevel;
+    d.hiddenTalent= Math.round(inN[i]*0.45*100 + crossRatio*0.35*100 + juniorScore*0.20*100);
   });
 
   // Change agent composite score
@@ -2399,10 +2433,11 @@ function renderSiloView() {
 function renderPanel(){
   const isSilos = curMetric === 'silos';
   const isCA = curMetric === 'changeAgent';
+  const isHT = curMetric === 'hiddenTalent';
   document.getElementById('ap-desc').textContent = isSilos
     ? 'How insular each team is — and where cross-team collaboration is weak.'
     : METRIC[curMetric]?.desc||'';
-  document.getElementById('ap-filter').style.display = (isSilos||isCA) ? 'none' : '';
+  document.getElementById('ap-filter').style.display = (isSilos||isCA||isHT) ? 'none' : '';
   if (isSilos) { renderSiloView(); renderSummary(); return; }
   // group filter options
   const groups=['all',...new Set(GD.nodes.map(d=>d.group))];
@@ -2422,10 +2457,33 @@ function renderList(){
   const list=document.getElementById('ap-list');
   list.innerHTML='';
   const isCA = m==='changeAgent';
+  const isHT = m==='hiddenTalent';
   nodes.forEach((d,i)=>{
     const pct=maxV>0?(d[m]/maxV*100).toFixed(0):0;
     const score=m==='betweenness'?d[m].toFixed(3):d[m];
     const col=colorScale(d.group);
+    if (isHT) {
+      if (d.hiddenTalent===0) return; // skip nodes with no in-demand
+      const row=document.createElement('div');
+      row.className='ca-row'+(selNode===d.id?' hi':'');
+      row.dataset.id=d.id;
+      const chip=(label,val,bg,tc)=>val>15?`<span class="ca-chip" style="background:${bg};color:${tc}">${label}</span>`:'';
+      const lvlLabel = d.htHasLevel
+        ? (d.level!=null ? `L${d.level}` : '?')
+        : (d.htJunior>60 ? 'low directive' : d.htJunior>30 ? 'mid' : 'high directive');
+      row.innerHTML=
+        `<div class="ca-top"><div class="ap-rank">${i+1}</div><div class="ap-dot" style="background:${col}"></div>`+
+        `<div class="ap-name">${d.id}</div><div class="ap-bar" style="width:44px"><div class="ap-bar-bg"><div class="ap-bar-fill" style="width:${pct}%;background:#f59e0b"></div></div></div>`+
+        `<div class="ap-score" style="color:#f59e0b">${score}</div></div>`+
+        `<div class="ca-chips">`+
+        chip(`↙ ${d.indegree} in-demand`,d.htInDemand,'#f59e0b22','#f59e0b')+
+        chip(`🌐 cross-team`,d.htCrossTeam,'#4c7fff22','#4c7fff')+
+        `<span class="ca-chip" style="background:#10b98122;color:#10b981">${lvlLabel}</span>`+
+        `</div>`;
+      row.addEventListener('click',()=>highlightFromPanel(d));
+      list.appendChild(row);
+      return;
+    }
     if (isCA) {
       const row=document.createElement('div');
       row.className='ca-row'+(selNode===d.id?' hi':'');
