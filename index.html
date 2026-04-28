@@ -338,6 +338,7 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
       <button class="btn btn-primary" id="load-btn">Load Graph</button>
       <button class="btn btn-ghost" id="sample-btn">Try Sample (20)</button>
       <button class="btn btn-ghost" id="sample-large-btn">Try Sample (100)</button>
+      <button class="btn btn-ghost" id="sample-xl-btn">Try Sample (2000)</button>
     </div>
   </div>
   <div class="input-actions">
@@ -926,6 +927,98 @@ Grace Sutton,Felix Armstrong,3,Operations,Operations
 Henry Lawson,Ursula Wagner,5,Operations,Operations
 Henry Lawson,Grace Sutton,3,Operations,Operations`;
 
+// ── SAMPLE GENERATOR (large networks) ────────────────────
+function generateSample(targetN) {
+  const FIRSTS = ['Alex','Bailey','Blake','Cameron','Casey','Charlie','Dana','Drew','Emery','Finley','Frankie','Harper','Hayden','Jamie','Jordan','Kai','Kennedy','Lane','Logan','Morgan','Parker','Peyton','Quinn','Reese','Riley','Rowan','Ryan','Sam','Sawyer','Skyler','Taylor','Terry','Tyler','Avery','Dylan','Elliot','Evan','Gray','Hunter','Jesse','Jules','Kendall','Lee','Lennon','Macy','Maddox','Noel','Nova','Paige','Piper','Remy','Robin','Sage','Shay','Spencer','Stevie','Tatum','Toby','Tracy','Val','Wade','Wynne','Zion','Adrian','Amber','Angela','Ashley','Brandon','Brian','Carol','Derek','Diana','Edward','Emma','Ethan','Felix','George','Grace','Hannah','Henry','Ivan','Jessica','John','Karen','Kevin','Laura','Mark','Maria','Michael','Nathan','Olivia','Patrick','Rachel','Robert','Sarah','Steven','Thomas','Victor','William','Chloe','Denise','Elena','Fiona','Gerald','Heidi','Isaac','Julia','Kurt'];
+  const LASTS = ['Smith','Jones','Williams','Taylor','Brown','Davies','Evans','Wilson','Thomas','Roberts','Johnson','Walker','Wright','Thompson','Robinson','White','Hughes','Edwards','Green','Hall','Lewis','Harris','Clarke','Patel','Jackson','Wood','Turner','Martin','Cooper','Hill','Ward','Morris','Moore','Clark','Lee','King','Baker','Harrison','Morgan','Allen','James','Scott','Phillips','Watson','Davis','Parker','Price','Bennett','Young','Griffiths','Mitchell','Kelly','Cook','Carter','Richardson','Bailey','Collins','Bell','Shaw','Murphy','Miller','Cox','Richards','Khan','Marshall','Anderson','Dixon','Ford','Graham','Grant','Gray','Griffin','Hamilton','Harper','Hart','Hayes','Henderson','Holmes','Howard','Hudson','Hunt','Hunter','Jenkins','Jordan','Kennedy','Lambert','Lawson','Lawrence','Mason','Matthews','Mills','Murray','Newman','Newton','Oliver','Owen','Page','Palmer','Patterson','Pearson','Perry','Peters','Powell','Reed','Reid','Reynolds','Rice','Rowe','Russell','Ryan','Simpson','Sinclair','Singh','Slater','Stephens','Stevens','Stewart','Stone','Sullivan','Thomson','Tran','Walsh','Weber','Weiss','Young'];
+
+  const DEPTS = [
+    {name:'Engineering',      frac:0.27},
+    {name:'Sales',            frac:0.13},
+    {name:'Marketing',        frac:0.10},
+    {name:'Product',          frac:0.10},
+    {name:'Operations',       frac:0.08},
+    {name:'Data Science',     frac:0.07},
+    {name:'HR',               frac:0.06},
+    {name:'Finance',          frac:0.05},
+    {name:'Customer Success', frac:0.05},
+    {name:'Legal',            frac:0.03},
+    {name:'Security',         frac:0.03},
+    {name:'Leadership',       frac:0.03},
+  ];
+
+  // Build unique name list (first × last)
+  const names = [];
+  outer: for (let li = 0; li < LASTS.length; li++) {
+    for (let fi = 0; fi < FIRSTS.length; fi++) {
+      names.push(FIRSTS[fi] + ' ' + LASTS[li]);
+      if (names.length >= targetN) break outer;
+    }
+  }
+
+  // Assign names to departments
+  const people = [], byDept = {};
+  let ni = 0;
+  for (const d of DEPTS) {
+    const cnt = Math.min(Math.round(targetN * d.frac), names.length - ni);
+    byDept[d.name] = [];
+    for (let i = 0; i < cnt && ni < names.length; i++, ni++) {
+      const p = {name: names[ni], dept: d.name};
+      people.push(p); byDept[d.name].push(p);
+    }
+  }
+  // overflow into Engineering
+  while (ni < Math.min(targetN, names.length)) {
+    const p = {name: names[ni++], dept: 'Engineering'};
+    people.push(p); byDept['Engineering'].push(p);
+  }
+
+  const rows = ['source_node,destination_node,edge_weight,source_group,destination_group'];
+  const added = new Set();
+  const addEdge = (a, b, w) => {
+    const k = a.name + '\x00' + b.name;
+    if (!added.has(k)) { added.add(k); rows.push(`${a.name},${b.name},${w},${a.dept},${b.dept}`); }
+  };
+  const ri = (mn, mx) => Math.floor(Math.random() * (mx - mn + 1)) + mn;
+
+  const TEAM = 8;
+  for (const members of Object.values(byDept)) {
+    for (let i = 0; i < members.length; i++) {
+      const tStart = Math.floor(i / TEAM) * TEAM;
+      const tEnd   = Math.min(tStart + TEAM, members.length);
+      const lead   = members[tStart];
+      if (i !== tStart) addEdge(members[i], lead, ri(5,9));        // report to lead
+      if (i === tStart && i > 0) addEdge(members[i], members[0], ri(4,8)); // lead → dept head
+      for (let j = tStart; j < tEnd; j++) {                        // peer collaboration
+        if (j !== i && Math.random() < 0.30) addEdge(members[i], members[j], ri(3,7));
+      }
+      if (Math.random() < 0.07) {                                  // occasional same-dept cross-team
+        const other = members[ri(0, members.length-1)];
+        addEdge(members[i], other, ri(2,5));
+      }
+    }
+  }
+
+  // Cross-department connections (~10 % of people get one)
+  const deptKeys = Object.keys(byDept);
+  for (const p of people) {
+    if (Math.random() < 0.10) {
+      const od = deptKeys.filter(d => d !== p.dept);
+      const tgts = byDept[od[ri(0, od.length-1)]];
+      addEdge(p, tgts[ri(0, tgts.length-1)], ri(2,5));
+    }
+  }
+
+  // Leadership → each dept head
+  for (const l of (byDept['Leadership'] || [])) {
+    for (const dk of deptKeys) {
+      if (dk !== 'Leadership' && byDept[dk].length) addEdge(l, byDept[dk][0], ri(6,9));
+    }
+  }
+
+  return rows.join('\n');
+}
+
 let GD = null, SIM = null, SVG = null, ZG = null;
 let communities = null, showComm = false;
 let curMetric = 'indegree', curGroup = 'all', selNode = null;
@@ -1035,7 +1128,12 @@ function brandsBetweenness(nodes, links, idx) {
     if (s != null && t != null && s !== t) adj[s].push(t);
   });
   const bc = new Array(n).fill(0);
-  for (let s = 0; s < n; s++) {
+  // For large graphs sample source nodes (approximation scales linearly)
+  const SAMPLE_LIMIT = 400;
+  const allIdx = Array.from({length:n}, (_,i) => i);
+  const sources = n > SAMPLE_LIMIT ? d3.shuffle(allIdx).slice(0, SAMPLE_LIMIT) : allIdx;
+  const scale = n / sources.length; // rescale to compensate for sampling
+  for (const s of sources) {
     const stack=[], pred=Array.from({length:n},()=>[]);
     const sigma=new Array(n).fill(0); sigma[s]=1;
     const dist=new Array(n).fill(-1); dist[s]=0;
@@ -1054,7 +1152,7 @@ function brandsBetweenness(nodes, links, idx) {
       if (w!==s) bc[w]+=delta[w];
     }
   }
-  const norm=(n-1)*(n-2); return bc.map(v=>norm>0?v/norm:0);
+  const norm=(n-1)*(n-2); return bc.map(v=>norm>0?v*scale/norm:0);
 }
 
 // ── COMMUNITY DETECTION ──────────────────────────────────
@@ -1659,6 +1757,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('sample-large-btn').addEventListener('click',()=>{
     document.getElementById('paste-area').value=SAMPLE_LARGE;
     loadGraph(SAMPLE_LARGE);
+  });
+  document.getElementById('sample-xl-btn').addEventListener('click',()=>{
+    document.getElementById('paste-area').value='(generating 2000-node network…)';
+    setTimeout(()=>{
+      const csv = generateSample(2000);
+      document.getElementById('paste-area').value = csv;
+      loadGraph(csv);
+    }, 10);
   });
 
   // file upload
