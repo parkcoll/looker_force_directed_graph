@@ -43,6 +43,11 @@ textarea::placeholder{color:#3d4168}
 .empty-state .ei{font-size:52px;opacity:.2}
 .empty-state p{font-size:14px;color:#4a5078}
 .legend{position:absolute;top:14px;left:14px;background:#1a1d27cc;border:1px solid #2d3148;border-radius:8px;padding:10px 12px;z-index:15;backdrop-filter:blur(4px);max-width:180px;display:none}
+.large-net-banner{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:25;background:#1a1d27ee;border:1px solid #f59e0b55;border-radius:8px;padding:9px 36px 9px 14px;max-width:520px;width:calc(100% - 32px);backdrop-filter:blur(4px);box-sizing:border-box}
+.large-net-banner-text{font-size:12px;color:#f59e0b;line-height:1.45}
+.large-net-banner-text strong{color:#fbbf24}
+.large-net-banner-close{position:absolute;top:7px;right:9px;background:none;border:none;color:#f59e0b88;font-size:15px;cursor:pointer;padding:0;line-height:1}
+.large-net-banner-close:hover{color:#f59e0b}
 .legend-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8b90a8;margin-bottom:7px}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .ldot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -208,6 +213,11 @@ body.theme-light .empty-state p{color:#9ca3af}
 body.theme-light .legend{background:rgba(255,255,255,.92);border-color:#dde3ef}
 body.theme-light .legend-title{color:#9ca3af}
 body.theme-light .llabel{color:#374151}
+body.theme-light .large-net-banner{background:rgba(255,249,235,.96);border-color:#f59e0b88}
+body.theme-light .large-net-banner-text{color:#92400e}
+body.theme-light .large-net-banner-text strong{color:#78350f}
+body.theme-light .large-net-banner-close{color:#d9770688}
+body.theme-light .large-net-banner-close:hover{color:#d97706}
 body.theme-light .sp,body.theme-light .ap{background:#fff;border-color:#dde3ef}
 body.theme-light .sp-head,body.theme-light .ap-head,body.theme-light .ap-filter,body.theme-light .ap-summary,body.theme-light .sp-footer{border-color:#dde3ef}
 body.theme-light .sp-title,body.theme-light .ap-title{color:#1e2230}
@@ -618,6 +628,10 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
       <p>Load a CSV above to visualise your network</p>
     </div>
     <div class="legend" id="legend"></div>
+    <div class="large-net-banner" id="large-net-banner">
+      <p class="large-net-banner-text"><strong>Large network detected.</strong> Charts with many nodes can be hard to read. Try the <strong>Max nodes</strong> slider in Settings to focus on the most connected people, or use <strong>Group View</strong> to collapse teams into bubbles.</p>
+      <button class="large-net-banner-close" id="large-net-banner-close" title="Dismiss">✕</button>
+    </div>
     <div class="toolbar" id="toolbar">
       <button class="btn btn-ghost" id="fit-btn" title="Fit view (F)">⊕ Fit</button>
       <button class="btn btn-ghost" id="search-btn" title="Search (/)">🔍 Search</button>
@@ -2730,6 +2744,13 @@ function loadGraph(raw){
     buildGroupCheckboxes(data);
     renderGraph(applyFilters(data));
     document.getElementById('loader').style.display='none';
+    const banner = document.getElementById('large-net-banner');
+    if (data.nodes.length > 250) {
+      banner.style.display = 'block';
+      banner._dismissed = false;
+    } else {
+      banner.style.display = 'none';
+    }
     setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')),800);
   },30);
 }
@@ -2747,6 +2768,13 @@ function buildGroupCheckboxes(data) {
 
 document.addEventListener('DOMContentLoaded',()=>{
   applyTheme('light');
+
+  // large network banner dismiss
+  document.getElementById('large-net-banner-close').addEventListener('click',()=>{
+    const b = document.getElementById('large-net-banner');
+    b.style.display = 'none';
+    b._dismissed = true;
+  });
 
   // tab switching
   document.getElementById('tabs').addEventListener('click',e=>{
