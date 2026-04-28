@@ -113,6 +113,32 @@ select:focus{border-color:#4c7fff44}
 .matrix-table td{font-family:monospace;font-size:8px;cursor:default}
 body.theme-light .silo-stack{background:#dde3ef}
 body.theme-light .matrix-table th, body.theme-light .matrix-table .row-lbl{color:#6b7280}
+/* change agent tab */
+.ca-row{display:flex;flex-direction:column;gap:3px;padding:5px 7px;border-radius:5px;cursor:pointer;border:1px solid transparent;transition:background .1s}
+.ca-row:hover{background:#2d314840}
+.ca-row.hi{background:#4c7fff22;border-color:#4c7fff33}
+.ca-top{display:flex;align-items:center;gap:7px}
+.ca-chips{display:flex;gap:4px;padding-left:25px;flex-wrap:wrap}
+.ca-chip{font-size:9px;font-weight:600;border-radius:4px;padding:1px 5px;opacity:.85}
+/* seed finder overlay */
+.seed-card{background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:18px 20px;width:340px;max-width:calc(100vw - 32px);max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px #00000066}
+.seed-controls{display:flex;align-items:center;gap:10px;margin:12px 0 4px}
+.seed-controls label{font-size:11px;color:#8b90a8;flex-shrink:0}
+.seed-controls input[type=range]{flex:1;accent-color:#4c7fff}
+.seed-controls span{font-size:12px;font-weight:700;color:#4c7fff;width:16px;text-align:center}
+.seed-row{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #2d314855}
+.seed-row:last-child{border-bottom:none}
+.seed-num{font-size:11px;font-weight:700;color:#4c7fff;width:16px;flex-shrink:0}
+.seed-info{flex:1;min-width:0}
+.seed-name{font-size:12px;font-weight:600;color:#e8eaf0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seed-meta{font-size:10px;color:#8b90a8;margin-top:1px}
+.seed-cov{font-size:11px;font-weight:700;color:#10b981;width:36px;text-align:right;flex-shrink:0}
+.seed-btn-row{display:flex;gap:8px;margin-top:14px}
+body.theme-light .seed-card{background:#fff;border-color:#dde3ef;box-shadow:0 8px 24px #0000001a}
+body.theme-light .seed-row{border-color:#eef1f7}
+body.theme-light .seed-name{color:#1e2230}
+body.theme-neon .seed-card{background:#060810;border-color:#0d2030}
+body.theme-corporate .seed-card{background:#0b1628;border-color:#1a3660}
 .ap-row:hover{background:#2d314840}
 .ap-row.hi{background:#4c7fff22;border-color:#4c7fff33}
 .ap-rank{font-size:10px;color:#4a5078;width:18px;text-align:right;flex-shrink:0;font-weight:700}
@@ -601,6 +627,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
         </div>
       </div>
       <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
+      <button class="btn btn-ghost" id="seed-btn" title="Find optimal change seeders">🌱 Seed</button>
       <button class="btn btn-ghost" id="crossteam-btn" title="Show only cross-team connections">⟷ Cross-team</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
@@ -626,6 +653,7 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
           <div class="tab" data-m="total">Networkers</div>
           <div class="tab" data-m="closeness">Reach</div>
           <div class="tab" data-m="silos" style="border-color:#ef444444;color:#ef4444">Silos</div>
+          <div class="tab" data-m="changeAgent" style="border-color:#10b98144;color:#10b981">Change Agents</div>
         </div>
         <div class="ap-desc" id="ap-desc"></div>
       </div>
@@ -650,7 +678,8 @@ const METRIC = {
   outdegree:   { label:'Top Influencers', desc:'How many people this person actively reaches out TO. High scorers are the ones who drive conversations, spread ideas, and keep others engaged. They shape culture more than their job title suggests.' },
   betweenness: { label:'Key Connectors', desc:'How often this person sits on the path between two others who need to talk. Think of them as the bridges in your organisation — remove them and some teams lose their only route to each other. Often invisible on org charts.' },
   total:       { label:'Top Networkers', desc:'Total connections in and out combined. These are the social hubs — people who simply know the most people. Useful for spreading messages quickly or onboarding new hires.' },
-  closeness:   { label:'Fastest Communicators', desc:'How quickly this person can reach everyone else in the network, on average. A high score means they are centrally placed — news, decisions, or changes that start with them spread to the whole organisation faster than from anyone else.' }
+  closeness:   { label:'Fastest Communicators', desc:'How quickly this person can reach everyone else in the network, on average. A high score means they are centrally placed — news, decisions, or changes that start with them spread to the whole organisation faster than from anyone else.' },
+  changeAgent: { label:'Change Agents', desc:'People best positioned to drive organisational change — ranked by a composite of cross-team reach (35%), bridge position (30%), network closeness (20%), and active outreach (15%). Unlike bottlenecks, high scorers span multiple groups without being single points of failure.' }
 };
 const SAMPLE = `source_node,destination_node,edge_weight,source_group,destination_group
 Sarah Mitchell,James Okonkwo,9,Leadership,Leadership
@@ -1209,6 +1238,28 @@ function computeMetrics(nodes, links) {
   nodes.forEach((d,i) => {
     d.indegree = ind[i]; d.outdegree = outd[i];
     d.total = ind[i] + outd[i]; d.betweenness = bc[i]; d.closeness = clos[i];
+  });
+
+  // Change agent composite score
+  const totalGroups = new Set(nodes.map(d => d.group)).size;
+  const nodeById = Object.fromEntries(nodes.map(d => [d.id, d]));
+  nodes.forEach(d => {
+    const cg = new Set();
+    links.forEach(l => {
+      const sid = l.source.id||l.source, tid = l.target.id||l.target;
+      if (sid === d.id) { const tg=(nodeById[tid]||{}).group; if(tg&&tg!==d.group) cg.add(tg); }
+      if (tid === d.id) { const sg=(nodeById[sid]||{}).group; if(sg&&sg!==d.group) cg.add(sg); }
+    });
+    d.crossGroupDiversity = totalGroups>1 ? cg.size/(totalGroups-1) : 0;
+    d.connectedGroupCount = cg.size;
+  });
+  const norm = arr => { const mx=Math.max(...arr)||1; return arr.map(v=>v/mx); };
+  const bN=norm(nodes.map(d=>d.betweenness)), cN=norm(nodes.map(d=>d.closeness));
+  const oN=norm(nodes.map(d=>d.outdegree)),   dN=norm(nodes.map(d=>d.crossGroupDiversity));
+  nodes.forEach((d,i) => {
+    d.changeAgent = Math.round((dN[i]*0.35 + bN[i]*0.30 + cN[i]*0.20 + oN[i]*0.15)*100);
+    d.caDiv=Math.round(dN[i]*100); d.caBet=Math.round(bN[i]*100);
+    d.caClo=Math.round(cN[i]*100); d.caOut=Math.round(oN[i]*100);
   });
 }
 
@@ -1839,6 +1890,110 @@ ${newBots.length?`<div class="hc-section"><div class="hc-section-title">New Pres
   document.getElementById('close-removal').addEventListener('click',()=>ov.remove());
 }
 
+// ── SEED FINDER ──────────────────────────────────────────
+function findOptimalSeeders(n) {
+  if (!GD) return [];
+  const adj = new Map();
+  GD.nodes.forEach(d => adj.set(d.id, new Set()));
+  GD.links.forEach(l => {
+    const sid=l.source.id||l.source, tid=l.target.id||l.target;
+    if(adj.has(sid)) adj.get(sid).add(tid);
+    if(adj.has(tid)) adj.get(tid).add(sid);
+  });
+  // 2-hop reachable set per node
+  const reach = new Map();
+  GD.nodes.forEach(d => {
+    const r = new Set([d.id]);
+    adj.get(d.id).forEach(n1=>{r.add(n1); adj.get(n1)?.forEach(n2=>r.add(n2));});
+    reach.set(d.id, r);
+  });
+  // Greedy set cover
+  const covered = new Set(), seeds = [], total = GD.nodes.length;
+  for (let i=0; i<n; i++) {
+    let best=null, bestGain=-1;
+    GD.nodes.forEach(d=>{
+      if (seeds.some(s=>s.node.id===d.id)) return;
+      const gain=[...reach.get(d.id)].filter(id=>!covered.has(id)).length;
+      if (gain>bestGain){bestGain=gain;best=d;}
+    });
+    if (!best||bestGain===0) break;
+    reach.get(best.id).forEach(id=>covered.add(id));
+    seeds.push({node:best, newReach:bestGain, totalCovered:covered.size, pct:Math.round(covered.size/total*100)});
+  }
+  return seeds;
+}
+
+function showSeedFinder() {
+  if (!GD) return;
+  let nSeeds = 3;
+  function renderSeeds(n) {
+    const seeds = findOptimalSeeders(n);
+    const card = document.getElementById('seed-card-inner');
+    let rows = seeds.map((s,i)=>`
+      <div class="seed-row">
+        <div class="seed-num">${i+1}</div>
+        <div class="ap-dot" style="background:${colorScale(s.node.group)};flex-shrink:0"></div>
+        <div class="seed-info">
+          <div class="seed-name">${s.node.id}</div>
+          <div class="seed-meta">${s.node.group} · reaches +${s.newReach} people within 2 steps</div>
+        </div>
+        <div class="seed-cov">${s.pct}%</div>
+      </div>`).join('');
+    const finalPct = seeds.length ? seeds[seeds.length-1].pct : 0;
+    card.innerHTML = rows +
+      `<div style="margin-top:10px;font-size:10px;color:#8b90a8;text-align:right">Combined 2-step coverage: <strong style="color:#10b981">${finalPct}%</strong> of the org</div>`;
+    return seeds;
+  }
+
+  let ov = document.getElementById('seed-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'seed-overlay'; ov.className = 'health-overlay';
+    ov.innerHTML = `<div class="seed-card">
+      <div class="hc-top">
+        <div class="hc-title">🌱 Optimal Change Seeding</div>
+        <button class="btn btn-ghost" id="close-seed" style="padding:4px 9px;font-size:11px">✕</button>
+      </div>
+      <div style="font-size:11px;color:#8b90a8;margin:6px 0 2px">The minimum set of people needed to reach the most of the org within 2 steps.</div>
+      <div class="seed-controls">
+        <label>Brief</label>
+        <input type="range" id="seed-slider" min="1" max="10" value="3">
+        <span id="seed-n">3</span>
+        <label>people</label>
+      </div>
+      <div id="seed-card-inner"></div>
+      <div class="seed-btn-row">
+        <button class="btn btn-primary" id="seed-highlight-btn" style="flex:1">Highlight on graph</button>
+        <button class="btn btn-ghost" id="seed-clear-btn">Clear</button>
+      </div>
+    </div>`;
+    document.getElementById('graph-wrap').appendChild(ov);
+    ov.addEventListener('click', e=>{if(e.target===ov)closeSeedFinder();});
+    document.getElementById('close-seed').addEventListener('click', closeSeedFinder);
+    document.getElementById('seed-slider').addEventListener('input', e=>{
+      nSeeds=+e.target.value;
+      document.getElementById('seed-n').textContent=nSeeds;
+      renderSeeds(nSeeds);
+    });
+    document.getElementById('seed-highlight-btn').addEventListener('click', ()=>{
+      const seeds = findOptimalSeeders(nSeeds);
+      searchMatchIds = new Set(seeds.map(s=>s.node.id));
+      applySearchHighlight();
+    });
+    document.getElementById('seed-clear-btn').addEventListener('click', ()=>{
+      searchMatchIds=null; applySearchHighlight();
+    });
+  }
+  ov.style.display='flex';
+  renderSeeds(nSeeds);
+}
+
+function closeSeedFinder() {
+  const ov=document.getElementById('seed-overlay');
+  if(ov) ov.style.display='none';
+  searchMatchIds=null; applySearchHighlight();
+}
+
 // ── EXPORT ───────────────────────────────────────────────
 function downloadText(text, filename, mime) {
   const blob = new Blob([text], {type: mime});
@@ -2237,10 +2392,11 @@ function renderSiloView() {
 
 function renderPanel(){
   const isSilos = curMetric === 'silos';
+  const isCA = curMetric === 'changeAgent';
   document.getElementById('ap-desc').textContent = isSilos
     ? 'How insular each team is — and where cross-team collaboration is weak.'
     : METRIC[curMetric]?.desc||'';
-  document.getElementById('ap-filter').style.display = isSilos ? 'none' : '';
+  document.getElementById('ap-filter').style.display = (isSilos||isCA) ? 'none' : '';
   if (isSilos) { renderSiloView(); renderSummary(); return; }
   // group filter options
   const groups=['all',...new Set(GD.nodes.map(d=>d.group))];
@@ -2259,16 +2415,36 @@ function renderList(){
   const maxV=nodes[0]?nodes[0][m]:1;
   const list=document.getElementById('ap-list');
   list.innerHTML='';
+  const isCA = m==='changeAgent';
   nodes.forEach((d,i)=>{
     const pct=maxV>0?(d[m]/maxV*100).toFixed(0):0;
     const score=m==='betweenness'?d[m].toFixed(3):d[m];
     const col=colorScale(d.group);
-    const row=document.createElement('div');
-    row.className='ap-row'+(selNode===d.id?' hi':'');
-    row.dataset.id=d.id;
-    row.innerHTML=`<div class="ap-rank">${i+1}</div><div class="ap-dot" style="background:${col}"></div><div class="ap-name">${d.id}</div><div class="ap-grp">${d.group}</div><div class="ap-bar"><div class="ap-bar-bg"><div class="ap-bar-fill" style="width:${pct}%"></div></div></div><div class="ap-score">${score}</div>`;
-    row.addEventListener('click',()=>{ highlightFromPanel(d); });
-    list.appendChild(row);
+    if (isCA) {
+      const row=document.createElement('div');
+      row.className='ca-row'+(selNode===d.id?' hi':'');
+      row.dataset.id=d.id;
+      const chip=(label,val,bg,tc)=>val>20?`<span class="ca-chip" style="background:${bg};color:${tc}">${label}</span>`:'';
+      row.innerHTML=
+        `<div class="ca-top"><div class="ap-rank">${i+1}</div><div class="ap-dot" style="background:${col}"></div>`+
+        `<div class="ap-name">${d.id}</div><div class="ap-bar" style="width:44px"><div class="ap-bar-bg"><div class="ap-bar-fill" style="width:${pct}%;background:#10b981"></div></div></div>`+
+        `<div class="ap-score" style="color:#10b981">${score}</div></div>`+
+        `<div class="ca-chips">`+
+        chip('🌐 '+d.connectedGroupCount+' groups',d.caDiv,'#4c7fff22','#4c7fff')+
+        chip('↔ bridge',d.caBet,'#f59e0b22','#f59e0b')+
+        chip('⟳ reach',d.caClo,'#a855f722','#a855f7')+
+        chip('↗ active',d.caOut,'#10b98122','#10b981')+
+        `</div>`;
+      row.addEventListener('click',()=>highlightFromPanel(d));
+      list.appendChild(row);
+    } else {
+      const row=document.createElement('div');
+      row.className='ap-row'+(selNode===d.id?' hi':'');
+      row.dataset.id=d.id;
+      row.innerHTML=`<div class="ap-rank">${i+1}</div><div class="ap-dot" style="background:${col}"></div><div class="ap-name">${d.id}</div><div class="ap-grp">${d.group}</div><div class="ap-bar"><div class="ap-bar-bg"><div class="ap-bar-fill" style="width:${pct}%"></div></div></div><div class="ap-score">${score}</div>`;
+      row.addEventListener('click',()=>{ highlightFromPanel(d); });
+      list.appendChild(row);
+    }
   });
 }
 
@@ -2471,7 +2647,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     curMetric=t.dataset.m;
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');
-    if(GD) renderPanel();
+    if(GD) { if(!document.getElementById('ap').classList.contains('open')) openPanel(); renderPanel(); }
   });
 
   // group filter
@@ -2735,6 +2911,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       else if (t === 'metrics') exportMetricsCSV();
       else if (t === 'edges') exportEdgesCSV();
     });
+  });
+
+  // Seed finder
+  document.getElementById('seed-btn').addEventListener('click', () => {
+    if (!GD) return;
+    showSeedFinder();
   });
 
   // Cross-team edges toggle
