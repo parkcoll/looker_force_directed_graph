@@ -47,7 +47,23 @@ textarea::placeholder{color:#3d4168}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
 .ldot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .llabel{font-size:11px;color:#c8cad8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toolbar{position:absolute;bottom:16px;right:16px;display:flex;gap:8px;z-index:20;display:none}
+.toolbar{position:absolute;bottom:12px;left:8px;right:8px;display:flex;gap:6px;z-index:20;flex-wrap:wrap;justify-content:flex-end;display:none}
+.toolbar .btn{flex-shrink:0}
+@media(max-width:600px){.toolbar{gap:5px;justify-content:center} .toolbar .btn{font-size:11px;padding:5px 8px}}
+/* sample dropdown */
+.sample-dd{position:relative;display:inline-block}
+.sample-dd-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:200;min-width:190px;padding:4px;box-shadow:0 6px 18px #00000055}
+.sample-dd-menu.open{display:block}
+.sample-opt{padding:7px 11px;font-size:12px;color:#c8cad8;cursor:pointer;border-radius:5px;transition:background .1s}
+.sample-opt:hover{background:#2d3148;color:#fff}
+.sample-opt small{display:block;font-size:10px;color:#8b90a8;margin-top:1px}
+body.theme-light .sample-dd-menu{background:#fff;border-color:#dde3ef;box-shadow:0 6px 18px #0000001a}
+body.theme-light .sample-opt{color:#374151}
+body.theme-light .sample-opt:hover{background:#eef1f7}
+body.theme-corporate .sample-dd-menu{background:#0f2040;border-color:#1a3660}
+body.theme-neon .sample-dd-menu{background:#080c14;border-color:#0d2030;box-shadow:0 6px 24px #00d4ff11}
+body.theme-neon .sample-opt{color:#c8f0ff}
+body.theme-neon .sample-opt:hover{background:#0d2030}
 .ap{width:0;background:#1a1d27;border-left:1px solid #2d3148;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s ease}
 .ap.open{width:370px}
 .ap-inner{width:370px;display:flex;flex-direction:column;height:100%;overflow:hidden}
@@ -336,9 +352,14 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
     </div>
     <div style="display:flex;flex-direction:column;gap:7px;padding-top:18px;flex-shrink:0">
       <button class="btn btn-primary" id="load-btn">Load Graph</button>
-      <button class="btn btn-ghost" id="sample-btn">Try Sample (20)</button>
-      <button class="btn btn-ghost" id="sample-large-btn">Try Sample (100)</button>
-      <button class="btn btn-ghost" id="sample-xl-btn">Try Sample (2000)</button>
+      <div class="sample-dd">
+        <button class="btn btn-ghost" id="sample-menu-btn">Try Sample ▾</button>
+        <div class="sample-dd-menu" id="sample-dd-menu">
+          <div class="sample-opt" data-sample="20">20 people<small>Small team demo</small></div>
+          <div class="sample-opt" data-sample="100">100 people<small>Mid-size org demo</small></div>
+          <div class="sample-opt" data-sample="2000">2 000 people<small>Large enterprise demo</small></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="input-actions">
@@ -472,6 +493,15 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
           </div>
         </div>
 
+        <div class="sp-section">
+          <div class="sp-section-title">Colour edges by (instant)</div>
+          <div class="sp-radio-group" id="sp-edgecol">
+            <label class="sp-radio"><input type="radio" name="edgecol" value="group" checked> Source group</label>
+            <label class="sp-radio"><input type="radio" name="edgecol" value="node"> Source node colour <span style="font-size:10px;color:#8b90a8">— shows clusters of influence</span></label>
+            <label class="sp-radio"><input type="radio" name="edgecol" value="neutral"> Neutral grey</label>
+          </div>
+        </div>
+
       </div>
       <div class="sp-footer">
         <button class="btn btn-primary" id="apply-settings-btn">↺ Apply &amp; Refresh Graph</button>
@@ -490,9 +520,10 @@ input[type=range]{width:100%;accent-color:#4c7fff;height:4px;cursor:pointer}
     <div class="toolbar" id="toolbar">
       <button class="btn btn-ghost" id="fit-btn">⊕ Fit</button>
       <button class="btn btn-ghost" id="settings-btn">⚙ Settings</button>
+      <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
-      <button class="btn btn-warn" id="health-btn">❤ Network Health</button>
-      <button class="btn btn-success" id="analyze-btn">▶ Analyse Graph</button>
+      <button class="btn btn-warn" id="health-btn">❤ Health</button>
+      <button class="btn btn-success" id="analyze-btn">▶ Analyse</button>
     </div>
     <div class="loader" id="loader">
       <div><div class="spinner"></div><p>Computing metrics…</p></div>
@@ -1220,7 +1251,45 @@ function applyFilters(raw) {
   return { nodes, links };
 }
 
+// ── GROUP-LEVEL GRAPH ────────────────────────────────────
+let groupViewActive = false, individualGD = null, individualRaw = null;
+
+function buildGroupGraph(data) {
+  const groups = [...new Set(data.nodes.map(d => d.group))].sort();
+  const memberCount = {};
+  data.nodes.forEach(d => { memberCount[d.group] = (memberCount[d.group]||0) + 1; });
+  const gNodes = groups.map(g => ({ id: g, group: g, memberCount: memberCount[g]||1 }));
+
+  const edgeMap = new Map();
+  data.links.forEach(l => {
+    const sg = typeof l.source==='object' ? l.source.group : (data.nodes.find(n=>n.id===l.source)||{}).group;
+    const tg = typeof l.target==='object' ? l.target.group : (data.nodes.find(n=>n.id===l.target)||{}).group;
+    if (!sg||!tg||sg===tg) return;
+    const key = sg+'\x00'+tg;
+    edgeMap.set(key, (edgeMap.get(key)||0) + (l.weight||1));
+  });
+  const gLinks = [...edgeMap.entries()].map(([k,w]) => {
+    const [source,target] = k.split('\x00');
+    return { source, target, weight: w, srcGrp: source, dstGrp: target };
+  });
+  const lset = new Set(gLinks.map(l=>l.source+'|'+l.target));
+  gLinks.forEach(l => { l.bi = lset.has(l.target+'|'+l.source); });
+  return { nodes: gNodes, links: gLinks };
+}
+
 // ── instant-apply visual functions ───────────────────────
+let edgeColMode = 'group'; // 'group' | 'node' | 'neutral'
+
+function getEdgeColor(d) {
+  if (edgeColMode === 'neutral') return '#4a5078';
+  if (edgeColMode === 'node') return getNodeColor(typeof d.source==='object' ? d.source : {group: d.srcGrp||d.source});
+  return colorScale(d.srcGrp || (d.source && d.source.group) || '');
+}
+
+function applyEdgeColour() {
+  d3.selectAll('#graph-svg .links path').attr('stroke', d => getEdgeColor(d));
+}
+
 function getNodeColor(d) {
   if (S.colourBy === 'group') return colorScale(d.group);
   if (S.colourBy === 'community') {
@@ -1237,6 +1306,7 @@ function getNodeColor(d) {
 
 function applyColour() {
   d3.selectAll('#graph-svg .nodes circle').attr('fill', d => getNodeColor(d));
+  if (edgeColMode === 'node') applyEdgeColour();
   renderLegend();
 }
 
@@ -1355,7 +1425,7 @@ function renderGraph(data){
 
   const link=linkG.selectAll('path').data(data.links).join('path')
     .attr('fill','none')
-    .attr('stroke',d=>colorScale(d.srcGrp||d.source.group||''))
+    .attr('stroke',d=>getEdgeColor(d))
     .attr('stroke-width',d=>1.5+edgeT(d.weight)*5)
     .attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65)
     .attr('marker-end',d=>`url(#arr${COLORS.indexOf(colorScale(d.srcGrp||d.source.group||''))%COLORS.length})`);
@@ -1749,23 +1819,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     loadGraph(txt);
   });
 
-  // sample data
-  document.getElementById('sample-btn').addEventListener('click',()=>{
-    document.getElementById('paste-area').value=SAMPLE;
-    loadGraph(SAMPLE);
-  });
-  document.getElementById('sample-large-btn').addEventListener('click',()=>{
-    document.getElementById('paste-area').value=SAMPLE_LARGE;
-    loadGraph(SAMPLE_LARGE);
-  });
-  document.getElementById('sample-xl-btn').addEventListener('click',()=>{
-    document.getElementById('paste-area').value='(generating 2000-node network…)';
-    setTimeout(()=>{
-      const csv = generateSample(2000);
-      document.getElementById('paste-area').value = csv;
-      loadGraph(csv);
-    }, 10);
-  });
+  // sample data — handled by dropdown (see sample-opt listeners below)
 
   // file upload
   const fi=document.getElementById('file-input');
@@ -1877,6 +1931,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('sp-colourby').addEventListener('change', e => {
     if (e.target.name==='colourby') { S.colourBy=e.target.value; if(GD) applyColour(); }
   });
+  // instant: edge colour mode
+  document.getElementById('sp-edgecol').addEventListener('change', e => {
+    if (e.target.name==='edgecol') { edgeColMode=e.target.value; if(GD) applyEdgeColour(); }
+  });
 
   // Apply & Refresh — re-filter + re-run simulation
   document.getElementById('apply-settings-btn').addEventListener('click',()=>{
@@ -1905,6 +1963,52 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Theme picker
   document.querySelectorAll('.tc').forEach(tc => {
     tc.addEventListener('click', () => applyTheme(tc.dataset.theme));
+  });
+
+  // Sample dropdown menu
+  const sMenuBtn = document.getElementById('sample-menu-btn');
+  const sMenu    = document.getElementById('sample-dd-menu');
+  sMenuBtn.addEventListener('click', e => { e.stopPropagation(); sMenu.classList.toggle('open'); });
+  document.addEventListener('click', () => sMenu.classList.remove('open'));
+  document.querySelectorAll('.sample-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      sMenu.classList.remove('open');
+      const n = +opt.dataset.sample;
+      if (n === 20) { document.getElementById('paste-area').value=SAMPLE; loadGraph(SAMPLE); }
+      else if (n === 100) { document.getElementById('paste-area').value=SAMPLE_LARGE; loadGraph(SAMPLE_LARGE); }
+      else {
+        document.getElementById('paste-area').value='(generating…)';
+        setTimeout(()=>{ const csv=generateSample(2000); document.getElementById('paste-area').value=csv; loadGraph(csv); },10);
+      }
+    });
+  });
+
+  // Group View toggle
+  document.getElementById('groupview-btn').addEventListener('click', () => {
+    if (!GD) return;
+    groupViewActive = !groupViewActive;
+    const btn = document.getElementById('groupview-btn');
+    if (groupViewActive) {
+      individualGD  = GD;
+      individualRaw = rawData;
+      btn.className = 'btn btn-on';
+      btn.textContent = '⬡ Individual';
+      const gd = buildGroupGraph(rawData || GD);
+      computeMetrics(gd.nodes, gd.links);
+      // use memberCount as size proxy
+      gd.nodes.forEach(d => { d.total = d.memberCount; });
+      renderGraph(gd);
+    } else {
+      btn.className = 'btn btn-ghost';
+      btn.textContent = '⬡ Group View';
+      if (individualRaw) {
+        const filtered = applyFilters(individualRaw);
+        computeMetrics(filtered.nodes, filtered.links);
+        renderGraph(filtered);
+        rawData = individualRaw;
+      }
+    }
+    setTimeout(()=>document.getElementById('graph-svg').dispatchEvent(new Event('_fitview')), 600);
   });
 
   // Reset settings
