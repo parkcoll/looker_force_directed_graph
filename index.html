@@ -627,7 +627,13 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
         </div>
       </div>
       <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
-      <button class="btn btn-ghost" id="seed-btn" title="Find optimal change seeders">🌱 Seed</button>
+      <div class="export-dd">
+        <button class="btn btn-ghost" id="change-menu-btn" title="Change agent tools">⚡ Change</button>
+        <div class="export-dd-menu" id="change-dd-menu">
+          <div class="export-opt" data-change="agents"><span class="export-opt-icon">🏅</span><div><div>Change Agents</div><small>Who can drive change — ranked</small></div></div>
+          <div class="export-opt" data-change="seed"><span class="export-opt-icon">🌱</span><div><div>Seed Group Finder</div><small>Minimum people to reach the org</small></div></div>
+        </div>
+      </div>
       <button class="btn btn-ghost" id="crossteam-btn" title="Show only cross-team connections">⟷ Cross-team</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
       <button class="btn btn-ghost" id="detect-btn">◉ Detect Groups</button>
@@ -2913,10 +2919,25 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
-  // Seed finder
-  document.getElementById('seed-btn').addEventListener('click', () => {
-    if (!GD) return;
-    showSeedFinder();
+  // Change dropdown
+  const changeBtn = document.getElementById('change-menu-btn');
+  const changeMenu = document.getElementById('change-dd-menu');
+  changeBtn.addEventListener('click', e => { e.stopPropagation(); changeMenu.classList.toggle('open'); });
+  document.addEventListener('click', () => changeMenu.classList.remove('open'));
+  document.querySelectorAll('.export-opt[data-change]').forEach(opt => {
+    opt.addEventListener('click', () => {
+      changeMenu.classList.remove('open');
+      if (!GD) { alert('Load a graph first.'); return; }
+      if (opt.dataset.change === 'agents') {
+        curMetric = 'changeAgent';
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+        document.querySelector('.tab[data-m="changeAgent"]').classList.add('on');
+        if (!document.getElementById('ap').classList.contains('open')) openPanel();
+        renderPanel();
+      } else if (opt.dataset.change === 'seed') {
+        showSeedFinder();
+      }
+    });
   });
 
   // Cross-team edges toggle
