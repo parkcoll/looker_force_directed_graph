@@ -551,7 +551,11 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
             </div>
           </div>
           <div class="sp-row">
-            <div class="sp-toggle">
+            <div class="sp-label">Edge width scale <span class="sp-val" id="sv-ew">1.0×</span></div>
+            <input type="range" id="sl-ew" min="0" max="30" step="1" value="10">
+          </div>
+          <div class="sp-row">
+            <div class="sp-toggle" style="display:none">
               <span>Canvas renderer <span style="font-size:9px;color:#8b90a8">faster for 500+ nodes</span></span>
               <label class="toggle-sw"><input type="checkbox" id="tgl-canvas"><div class="toggle-track"></div></label>
             </div>
@@ -1384,7 +1388,7 @@ let rawData = null; // full unfiltered dataset
 
 const DEFAULTS = { minWeight:1, maxNodes:200, excludeGroups:new Set(),
   linkDist:120, repulsion:600, gravity:0.04,
-  nodeScale:1.0, edgeOpacity:1.0, edgeCurve:0.25,
+  nodeScale:1.0, edgeOpacity:1.0, edgeCurve:0.25, edgeScale:1.0,
   showLabels:true, showArrows:true, colourBy:'group', sizeBy:'total' };
 const S = { ...DEFAULTS, excludeGroups: new Set() };
 
@@ -1556,6 +1560,10 @@ function applyEdgeOpacity() {
     });
 }
 
+function applyEdgeScale() {
+  if (useCanvas){drawCanvasFrame();return;}
+  d3.selectAll('#graph-svg .links path').attr('stroke-width', d => 0.8 + edgeT(d.weight) * 5 * S.edgeScale);
+}
 function applyLabels() {
   if (useCanvas){drawCanvasFrame();return;}
   d3.selectAll('#graph-svg .nodes text').attr('display', S.showLabels ? null : 'none');
@@ -1692,7 +1700,7 @@ function drawCanvasFrame() {
     const schDim = searchMatchIds && !searchMatchIds.has(l.source.id) && !searchMatchIds.has(l.target.id);
     const op = schDim ? 0.03 : selDim ? 0.04 : S.edgeOpacity*(0.2+eT(l.weight)*0.65);
     ctx.globalAlpha = op; ctx.strokeStyle = col;
-    ctx.lineWidth = 1.5+eT(l.weight)*5;
+    ctx.lineWidth = 0.8+eT(l.weight)*5*S.edgeScale;
     ctx.beginPath();
     if (l.bi && S.edgeCurve>0) {
       const off=Math.min(len*S.edgeCurve,80);
@@ -2191,7 +2199,7 @@ function renderGraph(data, keepPos){
   link
     .attr('fill','none')
     .attr('stroke',d=>getEdgeColor(d))
-    .attr('stroke-width',d=>1.5+edgeT(d.weight)*5)
+    .attr('stroke-width',d=>0.8+edgeT(d.weight)*5*S.edgeScale)
     .attr('stroke-opacity',d=>0.2+edgeT(d.weight)*0.65)
     .attr('marker-end',d=>`url(#arr${COLORS.indexOf(colorScale(d.srcGrp||d.source.group||''))%COLORS.length})`);
 
@@ -2849,10 +2857,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   sliderLive('sl-ns',  'sv-ns',   v => (+v/10).toFixed(1)+'×');
   sliderLive('sl-eo',  'sv-eo',   v => v+'%');
   sliderLive('sl-ec',  'sv-ec',   v => v+'%');
+  sliderLive('sl-ew',  'sv-ew',   v => (+v/10).toFixed(1)+'×');
 
   // instant visual: edge opacity
   document.getElementById('sl-eo').addEventListener('input', e => {
     S.edgeOpacity = +e.target.value/100; applyEdgeOpacity();
+  });
+  // instant: edge width scale
+  document.getElementById('sl-ew').addEventListener('input', e => {
+    S.edgeScale = +e.target.value/10; applyEdgeScale();
   });
   // instant: edge curve
   document.getElementById('sl-ec').addEventListener('input', e => {
@@ -2965,6 +2978,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('sl-ns').value=10; document.getElementById('sv-ns').textContent='1.0×';
     document.getElementById('sl-eo').value=100; document.getElementById('sv-eo').textContent='100%';
     document.getElementById('sl-ec').value=25; document.getElementById('sv-ec').textContent='25%';
+    document.getElementById('sl-ew').value=10; document.getElementById('sv-ew').textContent='1.0×';
     document.getElementById('tgl-labels').checked=true;
     document.getElementById('tgl-arrows').checked=true;
     document.querySelector('#sp-colourby input[value="group"]').checked=true;
