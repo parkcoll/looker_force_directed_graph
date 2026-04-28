@@ -619,20 +619,10 @@ body.theme-corporate #search-input{background:#0b1628;border-color:#1a78c2;color
       <button class="btn btn-ghost" id="search-btn" title="Search (/)">🔍 Search</button>
       <div class="export-dd">
         <button class="btn btn-ghost" id="export-menu-btn" title="Export">↓ Export</button>
-        <div class="export-dd-menu" id="export-dd-menu">
-          <div class="export-opt" data-export="png"><span class="export-opt-icon">🖼</span><div><div>Image (PNG)</div><small>Current graph view</small></div></div>
-          <div class="export-opt" data-export="svg"><span class="export-opt-icon">✦</span><div><div>Vector (SVG)</div><small>SVG mode only — scalable</small></div></div>
-          <div class="export-opt" data-export="metrics"><span class="export-opt-icon">📊</span><div><div>Metrics (CSV)</div><small>Node scores &amp; centrality</small></div></div>
-          <div class="export-opt" data-export="edges"><span class="export-opt-icon">🔗</span><div><div>Connections (CSV)</div><small>Raw edge list with weights</small></div></div>
-        </div>
       </div>
       <button class="btn btn-ghost" id="settings-btn" title="Settings">⚙ Settings</button>
       <div class="export-dd">
         <button class="btn btn-ghost" id="change-menu-btn" title="Change agent tools">⚡ Change</button>
-        <div class="export-dd-menu" id="change-dd-menu">
-          <div class="export-opt" data-change="agents"><span class="export-opt-icon">🏅</span><div><div>Change Agents</div><small>Who can drive change — ranked</small></div></div>
-          <div class="export-opt" data-change="seed"><span class="export-opt-icon">🌱</span><div><div>Seed Group Finder</div><small>Minimum people to reach the org</small></div></div>
-        </div>
       </div>
       <button class="btn btn-ghost" id="crossteam-btn" title="Show only cross-team connections">⟷ Cross-team</button>
       <button class="btn btn-ghost" id="groupview-btn">⬡ Group View</button>
@@ -3086,5 +3076,17 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 </script>
+
+<!-- Dropdown menus live at body level to escape toolbar overflow-x:auto stacking context -->
+<div class="export-dd-menu" id="export-dd-menu">
+  <div class="export-opt" data-export="png"><span class="export-opt-icon">🖼</span><div><div>Image (PNG)</div><small>Current graph view</small></div></div>
+  <div class="export-opt" data-export="svg"><span class="export-opt-icon">✦</span><div><div>Vector (SVG)</div><small>SVG mode only — scalable</small></div></div>
+  <div class="export-opt" data-export="metrics"><span class="export-opt-icon">📊</span><div><div>Metrics (CSV)</div><small>Node scores &amp; centrality</small></div></div>
+  <div class="export-opt" data-export="edges"><span class="export-opt-icon">🔗</span><div><div>Connections (CSV)</div><small>Raw edge list with weights</small></div></div>
+</div>
+<div class="export-dd-menu" id="change-dd-menu">
+  <div class="export-opt" data-change="agents"><span class="export-opt-icon">🏅</span><div><div>Change Agents</div><small>Who can drive change — ranked</small></div></div>
+  <div class="export-opt" data-change="seed"><span class="export-opt-icon">🌱</span><div><div>Seed Group Finder</div><small>Minimum people to reach the org</small></div></div>
+</div>
 </body>
 </html>
