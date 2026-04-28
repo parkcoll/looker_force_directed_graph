@@ -52,7 +52,7 @@ textarea::placeholder{color:#3d4168}
 @media(max-width:600px){.toolbar{gap:5px;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;left:4px;right:4px} .toolbar::-webkit-scrollbar{display:none} .toolbar .btn{font-size:11px;padding:5px 9px}}
 /* export dropdown */
 .export-dd{position:relative;display:inline-block}
-.export-dd-menu{display:none;position:absolute;bottom:calc(100% + 4px);right:0;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:200;min-width:210px;padding:4px;box-shadow:0 6px 18px #00000055}
+.export-dd-menu{display:none;position:fixed;background:#1a1d27;border:1px solid #2d3148;border-radius:7px;z-index:9999;min-width:210px;padding:4px;box-shadow:0 6px 18px #00000055}
 .export-dd-menu.open{display:block}
 .export-opt{padding:7px 11px;font-size:12px;color:#c8cad8;cursor:pointer;border-radius:5px;transition:background .1s;display:flex;align-items:center;gap:8px}
 .export-opt:hover{background:#2d3148;color:#fff}
@@ -2960,14 +2960,28 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(GD){ applyColour(); applyEdgeOpacity(); applyLabels(); applyArrows(); }
   });
 
+  function positionMenu(btn, menu) {
+    const r = btn.getBoundingClientRect();
+    menu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+    const rightEdge = window.innerWidth - r.right;
+    menu.style.right = Math.max(4, rightEdge) + 'px';
+    menu.style.left = 'auto';
+  }
+
   // Export dropdown
   const exportBtn = document.getElementById('export-menu-btn');
   const exportMenu = document.getElementById('export-dd-menu');
-  exportBtn.addEventListener('click', e => { e.stopPropagation(); exportMenu.classList.toggle('open'); });
-  document.addEventListener('click', () => exportMenu.classList.remove('open'));
+  exportBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const opening = !exportMenu.classList.contains('open');
+    exportMenu.classList.remove('open'); changeMenu.classList.remove('open');
+    if (opening) { positionMenu(exportBtn, exportMenu); exportMenu.classList.add('open'); }
+  });
+  document.addEventListener('click', () => { exportMenu.classList.remove('open'); changeMenu.classList.remove('open'); });
   document.querySelectorAll('.export-opt').forEach(opt => {
     opt.addEventListener('click', () => {
       exportMenu.classList.remove('open');
+      if (!opt.dataset.export) return;
       if (!GD) { alert('Load a graph first.'); return; }
       const t = opt.dataset.export;
       if (t === 'png') exportPNG();
@@ -2980,8 +2994,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Change dropdown
   const changeBtn = document.getElementById('change-menu-btn');
   const changeMenu = document.getElementById('change-dd-menu');
-  changeBtn.addEventListener('click', e => { e.stopPropagation(); changeMenu.classList.toggle('open'); });
-  document.addEventListener('click', () => changeMenu.classList.remove('open'));
+  changeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const opening = !changeMenu.classList.contains('open');
+    exportMenu.classList.remove('open'); changeMenu.classList.remove('open');
+    if (opening) { positionMenu(changeBtn, changeMenu); changeMenu.classList.add('open'); }
+  });
   document.querySelectorAll('.export-opt[data-change]').forEach(opt => {
     opt.addEventListener('click', () => {
       changeMenu.classList.remove('open');
