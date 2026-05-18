@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pick a folder for ChatGPT</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #e5e5e5;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --safe-bg: #ecfdf5;
+    --safe-fg: #065f46;
+    --unsafe-bg: #fef2f2;
+    --unsafe-fg: #991b1b;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 520px; margin: 3rem auto; padding: 0 1.25rem; }
+  h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 1.75rem; font-size: 0.95rem; line-height: 1.5; }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: white;
+    padding: 1.5rem 1.25rem;
+    text-align: center;
+  }
+  .selected-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem;
+    word-break: break-word;
+  }
+  .selected-hint { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .none-state { color: var(--muted); font-size: 0.95rem; margin: 0 0 1rem; }
+
+  button.primary {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-family: inherit;
+  }
+  button.primary:hover:not([disabled]) { background: var(--accent-hover); }
+  button.primary[disabled] { opacity: 0.45; cursor: not-allowed; }
+  button.secondary {
+    background: white;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.9rem;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 0.75rem;
+  }
+  button.secondary:hover { background: #f3f4f6; }
+
+  .footer { margin-top: 1.25rem; }
+
+  .promises {
+    margin-top: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .promises > div { padding: 0.85rem 1rem; font-size: 0.875rem; line-height: 1.5; }
+  .can { background: var(--safe-bg); color: var(--safe-fg); border-bottom: 1px solid #d1fae5; }
+  .cant { background: var(--unsafe-bg); color: var(--unsafe-fg); }
+  .promises strong { display: block; margin-bottom: 0.2rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .promises ul { margin: 0; padding-left: 1.1rem; }
+
+  .err {
+    margin-top: 1rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.85rem;
+    border: 1px solid #fecaca;
+    display: none;
+  }
+  .err.show { display: block; }
+
+  @media (max-width: 480px) {
+    .wrap { margin: 1.5rem auto; }
+    h1 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pick a folder for ChatGPT</h1>
+  <p class="sub">ChatGPT will only be able to read and write inside the folder you choose. Nothing else in your Drive will be visible.</p>
+
+  <div class="card">
+    <div id="empty-state">
+      <p class="none-state">No folder selected yet.</p>
+      <button class="primary" id="open-picker" disabled>Loading picker…</button>
+    </div>
+    <div id="selected-state" style="display:none">
+      <div style="font-size:1.8rem">📁</div>
+      <p class="selected-name" id="selected-name"></p>
+      <p class="selected-hint">ChatGPT will be scoped to this folder.</p>
+      <button class="secondary" id="change">Pick a different folder</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="primary" id="confirm" disabled>Finish setup</button>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="promises">
+    <div class="can">
+      <strong>ChatGPT will be able to</strong>
+      <ul>
+        <li>List files in the chosen folder</li>
+        <li>Read those files</li>
+        <li>Create new docs inside the folder</li>
+        <li>Edit files it has access to inside the folder</li>
+      </ul>
+    </div>
+    <div class="cant">
+      <strong>ChatGPT cannot</strong>
+      <ul>
+        <li>See or read anything outside the folder</li>
+        <li>Move things in or out of the folder</li>
+        <li>Touch other parts of your Drive — Google itself blocks this</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://apis.google.com/js/api.js"></script>
+<script>
+  const API_KEY = {{API_KEY}};
+  const APP_ID = {{APP_ID}};
+  const SESSION = {{SESSION_ID}};
+
+  const openBtn = document.getElementById('open-picker');
+  const changeBtn = document.getElementById('change');
+  const confirmBtn = document.getElementById('confirm');
+  const emptyState = document.getElementById('empty-state');
+  const selectedState = document.getElementById('selected-state');
+  const selectedNameEl = document.getElementById('selected-name');
+  const errEl = document.getElementById('err');
+
+  let pickerReady = false;
+  let oauthToken = null;
+  let selected = null;
+
+  function showErr(msg) {
+    errEl.textContent = msg;
+    errEl.classList.add('show');
+  }
+
+  function maybeEnableOpen() {
+    if (pickerReady && oauthToken) {
+      openBtn.disabled = false;
+      openBtn.textContent = 'Open Drive picker';
+    }
+  }
+
+  function setSelected(folder) {
+    selected = folder;
+    if (folder) {
+      emptyState.style.display = 'none';
+      selectedState.style.display = '';
+      selectedNameEl.textContent = folder.name;
+      confirmBtn.disabled = false;
+    } else {
+      emptyState.style.display = '';
+      selectedState.style.display = 'none';
+      confirmBtn.disabled = true;
+    }
+  }
+
+  function showPicker() {
+    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setIncludeFolders(true)
+      .setMimeTypes('application/vnd.google-apps.folder')
+      .setSelectFolderEnabled(true);
+
+    const picker = new google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(oauthToken)
+      .setDeveloperKey(API_KEY)
+      .setAppId(APP_ID)
+      .setTitle('Pick one folder for ChatGPT')
+      .setCallback((data) => {
+        if (data.action === google.picker.Action.PICKED) {
+          const f = data.docs[0];
+          setSelected({ id: f.id, name: f.name });
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  }
+
+  openBtn.addEventListener('click', showPicker);
+  changeBtn.addEventListener('click', showPicker);
+
+  confirmBtn.addEventListener('click', async () => {
+    if (!selected) return;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Finishing setup…';
+    try {
+      const r = await fetch('/api/scope/save', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session: SESSION, folder_id: selected.id, folder_name: selected.name }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      location.href = data.redirect_url;
+    } catch (e) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Finish setup';
+      showErr('Could not save. Try again.');
+    }
+  });
+
+  // Load Picker API and fetch the user's OAuth token in parallel.
+  gapi.load('picker', () => { pickerReady = true; maybeEnableOpen(); });
+
+  fetch('/api/scope/picker-token?session=' + encodeURIComponent(SESSION))
+    .then((r) => r.ok ? r.json() : Promise.reject(r))
+    .then((data) => { oauthToken = data.access_token; maybeEnableOpen(); })
+    .catch(() => showErr('Could not load the picker. Refresh and try again.'));
+</script>
+</body>
+</html>
